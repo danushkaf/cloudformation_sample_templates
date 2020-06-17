@@ -1,0 +1,154 @@
+AWSTemplateFormatVersion: 2010-09-09
+Parameters:
+  EnvironmentPrefix:
+    Type: String
+    Default: Dev
+    Description: Prefix for Env Name
+  CustomDomain:
+    Type: String
+    Default: dev.www.example.com
+    Description: Custom Domain for the web site
+  PriceClass:
+    Type: String
+    Default: PriceClass_100
+    AllowedValues:
+      - PriceClass_100
+      - PriceClass_200
+      - PriceClass_All
+    Description: Price Class for the Distribution
+  CertificateArn:
+    Type: String
+    Description: Arn of an validated ACM certificate
+  WAFArn:
+    Type: String
+    Description: Arn of an validated WebACL
+  EnableLogs:
+    Type: String
+    Default: 'Disabled'
+    AllowedValues:
+      - Enabled
+      - Disabled
+
+Metadata:
+  'AWS::CloudFormation::Interface':
+    ParameterGroups:
+      - Label:
+          default: CloudFront Parameters
+        Parameters:
+          - EnvironmentPrefix
+          - CustomDomain
+          - PriceClass
+          - CertificateArn
+          - WAFArn
+          - EnableLogs
+
+Conditions:
+  IsEnableLogs: !Equals [!Ref EnableLogs, 'enabled']
+  HasCustomDomain: !Not [!Equals [!Ref CustomDomain, '']]
+  HasCertificateArn: !Not [!Equals [!Ref CertificateArn, '']]
+  HasCustomDomainEnabled: !And [Condition: HasCustomDomain, Condition: HasCertificateArn ]
+
+Resources:
+  S3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      AccessControl: Private
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: 'true'
+        BlockPublicPolicy: 'true'
+        IgnorePublicAcls: 'true'
+        RestrictPublicBuckets: 'true'
+      Tags:
+        - Key: "Name"
+          Value: !Sub "${EnvironmentPrefix}-marketing-site-CloudFront-Origin"
+
+  LoggingBucket:
+    Type: AWS::S3::Bucket
+    Condition: IsEnableLogs
+    Properties:
+      AccessControl: LogDeliveryWrite      
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: 'true'
+        BlockPublicPolicy: 'true'
+        IgnorePublicAcls: 'true'
+        RestrictPublicBuckets: 'true'
+
+  cloudfrontoriginaccessidentity:
+    Type: AWS::CloudFront::CloudFrontOriginAccessIdentity
+    Properties:
+      CloudFrontOriginAccessIdentityConfig:
+        Comment: Origin Access Identity for CloudFront
+
+  OriginAccessIdentityBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref S3Bucket
+      PolicyDocument:
+        Statement:
+          -
+            Action:
+              - "s3:GetObject"
+            Effect: "Allow"
+            Resource:
+              Fn::Join:
+                - ""
+                -
+                  - "arn:aws:s3:::"
+                  - !Ref S3Bucket
+                  - "/*"
+            Principal:
+              AWS:
+                Fn::Join:
+                  - ""
+                  -
+                    - "arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity "
+                    - !Ref cloudfrontoriginaccessidentity
+
+  cloudfrontdistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Origins:
+        - DomainName: !GetAtt S3Bucket.DomainName
+          Id: S3OriginConfig
+          S3OriginConfig:
+            OriginAccessIdentity: !Sub "origin-access-identity/cloudfront/${cloudfrontoriginaccessidentity}"
+        Enabled: 'true'
+        Comment: CloudFront Distribution for Web Application
+        DefaultRootObject: index.html
+        Logging: !If
+          - IsEnableLogs
+          -
+            IncludeCookies: 'false'
+            Bucket: !GetAtt LoggingBucket.DomainName
+            Prefix: !Ref EnvironmentPrefix
+          - !Ref "AWS::NoValue"
+        Aliases: !If
+        - HasCustomDomainEnabled
+        - - !Ref CustomDomain
+        - !Ref "AWS::NoValue"
+        DefaultCacheBehavior:
+          AllowedMethods:
+          - DELETE
+          - GET
+          - HEAD
+          - OPTIONS
+          - PATCH
+          - POST
+          - PUT
+          TargetOriginId: S3OriginConfig
+          ForwardedValues:
+            QueryString: 'true'
+            Cookies:
+              Forward: none
+          ViewerProtocolPolicy: allow-all
+        PriceClass: !Ref PriceClass
+        ViewerCertificate: !If
+          - HasCustomDomainEnabled
+          - AcmCertificateArn: !Ref CertificateArn
+            SslSupportMethod: sni-only
+          - CloudFrontDefaultCertificate: 'true'
+        WebACLId: !Ref WAFArn
+      Tags:
+        - Key: "Name"
+          Value: !Sub "${EnvironmentPrefix}-CloudFront-Distribution"
