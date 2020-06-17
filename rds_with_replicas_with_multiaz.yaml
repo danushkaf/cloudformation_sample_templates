@@ -1,0 +1,177 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: >
+  A basic CloudFormation template for an RDS Aurora cluster.
+Parameters:
+  DatabaseUsername:
+    AllowedPattern: "[a-zA-Z0-9]+"
+    ConstraintDescription: must be between 1 to 16 alphanumeric characters.
+    Description: The database admin account user name, between 1 to 16 alphanumeric characters.
+    MaxLength: '16'
+    MinLength: '1'
+    Type: String
+  DatabasePassword:
+    AllowedPattern: "[a-zA-Z0-9]+"
+    ConstraintDescription: must be between 8 to 41 alphanumeric characters.
+    Description: The database admin account password, between 8 to 41 alphanumeric characters.
+    MaxLength: '41'
+    MinLength: '8'
+    NoEcho: 'true'
+    Type: String
+  DatabaseName:
+    AllowedPattern: "[a-zA-Z0-9-_]+"
+    ConstraintDescription: must be between 4 to 30 alphanumeric characters.
+    Description: The database admin account user name, between 4 to 30 alphanumeric characters.
+    MaxLength: '30'
+    MinLength: '4'
+    Type: String
+  Subnets:
+    Type: "List<AWS::EC2::Subnet::Id>"
+  IsReplicaEnabled:
+    AllowedValues:
+      - "True"
+      - "False"
+    Default: "True"
+    Type: String
+    Description: If set to true read replica will get created
+  IsMultiAZ:
+    AllowedValues:
+      - "True"
+      - "False"
+    Default: "True"
+    Type: String
+    Description: If set to primary instance will be MultiAZ enabled
+  IsReplicaMultiAZ:
+    AllowedValues:
+      - "True"
+      - "False"
+    Default: "True"
+    Type: String
+    Description: If set to replica instance will be MultiAZ enabled
+  InstanceType:
+    Type: String
+    Default: db.t2.small
+    Description: Enter db Instance types.
+  DBClusterIdentifier:
+    Type: String
+    Description: Tenant Name
+  DBSecurityGroup:
+    Type: "AWS::EC2::SecurityGroup::Id"
+    Description: Security Group Name
+  VpcId:
+    Type: "AWS::EC2::VPC::Id"
+    Description: The VPC of the worker instances
+  DBAllocatedStorage:
+    Default: '50'
+    Description: The size of the database (GiB)
+    Type: Number
+    MinValue: '5'
+    MaxValue: '1024'
+    ConstraintDescription: must be between 20 and 65536 GiB.
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: Database Configuration
+        Parameters:
+          - DatabaseName
+          - DatabaseUsername
+          - DatabasePassword
+          - Subnets
+    ParameterLabels:
+      DatabaseName:
+        default: Database Name
+      DatabaseUsername:
+        default: Database Username
+      DatabasePassword:
+        default: Database Password
+      Subnets:
+        default: DB Private Sub Nets
+      InstanceType:
+        default: DB Instance Type
+      DBClusterIdentifier:
+        default: DB Cluster Name
+Conditions:
+  HasReplicaEnabled: !Equals [!Ref IsReplicaEnabled, 'True']
+Resources:
+  ADBSecurityGroup:
+    Type: "AWS::EC2::SecurityGroup"
+    Properties:
+      GroupDescription: Security group for db
+      VpcId: !Ref VpcId
+  ADBSecurityGroupIngress:
+    Type: "AWS::EC2::SecurityGroupIngress"
+    DependsOn: ADBSecurityGroup
+    Properties:
+      Description: Allow Kube nodes to communicate with the DB
+      FromPort: 3306
+      GroupId: !Ref ADBSecurityGroup
+      IpProtocol: tcp
+      SourceSecurityGroupId: !Ref DBSecurityGroup
+      ToPort: 3306
+  DatabaseSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: CloudFormation managed DB subnet group.
+      SubnetIds: !Ref Subnets
+  RDSDBInstanceParameterGroup:
+    Type: "AWS::RDS::DBParameterGroup"
+    Properties:
+      Description: "Custom Instance Parameter Group"
+      Family: mysql5.6
+      Parameters:
+        max_connections: 16000
+  MyRDSSecret:
+    Type: "AWS::SecretsManager::Secret"
+    Properties:
+      Description: "This is a Secrets Manager secret for an RDS DB instance"
+      Description: Database Credentials
+      Name: !Sub '${DBClusterIdentifier}-DB-Password'
+      SecretString: !Sub '{"username":"${DatabaseUsername}","password":"${DatabasePassword}"}'
+  SecretRDSInstanceAttachment:
+    Type: "AWS::SecretsManager::SecretTargetAttachment"
+    Properties:
+      SecretId: !Ref MyRDSSecret
+      TargetId: !Ref DatabasePrimaryInstance
+      TargetType: AWS::RDS::DBInstance
+  DatabasePrimaryInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      Engine: MySQL
+      EngineVersion: 5.6.44
+      DBName: !Ref "DatabaseName"
+      MasterUsername: !Join ['', ['{{resolve:secretsmanager:', !Ref MyRDSSecret, ':SecretString:username}}' ]]
+      MasterUserPassword: !Join ['', ['{{resolve:secretsmanager:', !Ref MyRDSSecret, ':SecretString:password}}' ]]
+      DBInstanceClass: !Ref "InstanceType"
+      DBSubnetGroupName: !Ref "DatabaseSubnetGroup"
+      DBParameterGroupName: !Ref "RDSDBInstanceParameterGroup"
+      AllocatedStorage: !Ref DBAllocatedStorage
+      MultiAZ: !Ref IsMultiAZ
+      BackupRetentionPeriod: 7
+      StorageEncrypted: True
+      PreferredBackupWindow: 01:00-02:00
+      PreferredMaintenanceWindow: mon:03:00-mon:04:00
+      Tags:
+         -
+            Key: "Tenant Name"
+            Value: !Ref "DBClusterIdentifier"
+  DatabaseReplicaInstance:
+    Type: AWS::RDS::DBInstance
+    Condition: HasReplicaEnabled
+    Properties:
+      Engine: MySQL
+      EngineVersion: 5.6.44
+      DBName: !Ref "DatabaseName"
+      MasterUsername: !Join ['', ['{{resolve:secretsmanager:', !Ref MyRDSSecret, ':SecretString:username}}' ]]
+      MasterUserPassword: !Join ['', ['{{resolve:secretsmanager:', !Ref MyRDSSecret, ':SecretString:password}}' ]]
+      DBInstanceClass: !Ref "InstanceType"
+      DBParameterGroupName: !Ref "RDSDBInstanceParameterGroup"
+      BackupRetentionPeriod: 7
+      MultiAZ: !Ref IsReplicaMultiAZ
+      StorageEncrypted: True
+      PreferredBackupWindow: 01:00-02:00
+      PreferredMaintenanceWindow: mon:03:00-mon:04:00
+      SourceDBInstanceIdentifier: !Ref DatabasePrimaryInstance
+      Tags:
+         -
+            Key: "Tenant Name"
+            Value: !Ref "DBClusterIdentifier"
