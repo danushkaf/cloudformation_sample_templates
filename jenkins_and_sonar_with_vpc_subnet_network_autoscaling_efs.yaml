@@ -1,0 +1,1344 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Amazon EKS HP VPC NodeGroup
+Parameters:
+  EnvironmentPrefix:
+    Type: String
+    Default: dev
+    Description: Prefix for Env Name
+  VpcBlock:
+    Type: String
+    Default: 192.168.0.0/16
+    Description: >-
+      The CIDR range for the VPC. This should be a valid private (RFC 1918) CIDR
+      range.
+  BastionImageID:
+    Type: String
+    Default: ami-0a6b632d7d51019e8
+    Description: Image ID / AMI ID for Bastion Host
+  LoadBalancerCertificateArn:
+    Type: String
+    Description: 'Optional Amazon Resource Name (ARN) of the certificate to associate with the load balancer.'
+  Subnet01Block:
+    Type: String
+    Default: 192.168.1.0/24
+    Description: CidrBlock for subnet 01 within the VPC
+  Subnet02Block:
+    Type: String
+    Default: 192.168.2.0/24
+    Description: CidrBlock for subnet 02 within the VPC
+  Subnet03Block:
+    Type: String
+    Default: 192.168.3.0/24
+    Description: CidrBlock for subnet 03 within the VPC
+  Subnet04Block:
+    Type: String
+    Default: 192.168.4.0/24
+    Description: CidrBlock for subnet 04 within the VPC
+  Subnet05Block:
+    Type: String
+    Default: 192.168.5.0/24
+    Description: CidrBlock for subnet 05 within the VPC
+  Subnet06Block:
+    Type: String
+    Default: 192.168.6.0/24
+    Description: CidrBlock for subnet 06 within the VPC
+  KeyName:
+    Type: "AWS::EC2::KeyPair::KeyName"
+    Description: The EC2 Key Pair to allow SSH access to the instances
+  NodeAutoScalingGroupDesiredCapacity:
+    Type: Number
+    Default: 1
+    Description: Desired capacity of Node Group ASG.
+  NodeAutoScalingGroupMaxSize:
+    Type: Number
+    Default: 1
+    Description: Maximum size of Node Group ASG. Set to at least 1 greater than NodeAutoScalingGroupDesiredCapacity.
+  NodeAutoScalingGroupMinSize:
+    Type: Number
+    Default: 1
+    Description: Minimum size of Node Group ASG.
+  PolicyTargetValue:
+    Type: String
+    Default: 40
+  NodeGroupName:
+    Type: String
+    Default: dev
+    Description: Unique identifier for the Node Group.
+  NodeImageId:
+    Type: String
+    Default: ami-0dc62e9f32fc0f614
+    Description: Specify image ID for jenkins instances
+  NodeInstanceType:
+    Type: String
+    Default: t3.large
+    AllowedValues:
+      - a1.medium
+      - a1.large
+      - a1.xlarge
+      - a1.2xlarge
+      - a1.4xlarge
+      - c1.medium
+      - c1.xlarge
+      - c3.large
+      - c3.xlarge
+      - c3.2xlarge
+      - c3.4xlarge
+      - c3.8xlarge
+      - c4.large
+      - c4.xlarge
+      - c4.2xlarge
+      - c4.4xlarge
+      - c4.8xlarge
+      - c5.large
+      - c5.xlarge
+      - c5.2xlarge
+      - c5.4xlarge
+      - c5.9xlarge
+      - c5.12xlarge
+      - c5.18xlarge
+      - c5.24xlarge
+      - c5.metal
+      - c5d.large
+      - c5d.xlarge
+      - c5d.2xlarge
+      - c5d.4xlarge
+      - c5d.9xlarge
+      - c5d.18xlarge
+      - c5n.large
+      - c5n.xlarge
+      - c5n.2xlarge
+      - c5n.4xlarge
+      - c5n.9xlarge
+      - c5n.18xlarge
+      - cc2.8xlarge
+      - cr1.8xlarge
+      - d2.xlarge
+      - d2.2xlarge
+      - d2.4xlarge
+      - d2.8xlarge
+      - f1.2xlarge
+      - f1.4xlarge
+      - f1.16xlarge
+      - g2.2xlarge
+      - g2.8xlarge
+      - g3s.xlarge
+      - g3.4xlarge
+      - g3.8xlarge
+      - g3.16xlarge
+      - h1.2xlarge
+      - h1.4xlarge
+      - h1.8xlarge
+      - h1.16xlarge
+      - hs1.8xlarge
+      - i2.xlarge
+      - i2.2xlarge
+      - i2.4xlarge
+      - i2.8xlarge
+      - i3.large
+      - i3.xlarge
+      - i3.2xlarge
+      - i3.4xlarge
+      - i3.8xlarge
+      - i3.16xlarge
+      - i3.metal
+      - i3en.large
+      - i3en.xlarge
+      - i3en.2xlarge
+      - i3en.3xlarge
+      - i3en.6xlarge
+      - i3en.12xlarge
+      - i3en.24xlarge
+      - m1.small
+      - m1.medium
+      - m1.large
+      - m1.xlarge
+      - m2.xlarge
+      - m2.2xlarge
+      - m2.4xlarge
+      - m3.medium
+      - m3.large
+      - m3.xlarge
+      - m3.2xlarge
+      - m4.large
+      - m4.xlarge
+      - m4.2xlarge
+      - m4.4xlarge
+      - m4.10xlarge
+      - m4.16xlarge
+      - m5.large
+      - m5.xlarge
+      - m5.2xlarge
+      - m5.4xlarge
+      - m5.8xlarge
+      - m5.12xlarge
+      - m5.16xlarge
+      - m5.24xlarge
+      - m5.metal
+      - m5a.large
+      - m5a.xlarge
+      - m5a.2xlarge
+      - m5a.4xlarge
+      - m5a.8xlarge
+      - m5a.12xlarge
+      - m5a.16xlarge
+      - m5a.24xlarge
+      - m5ad.large
+      - m5ad.xlarge
+      - m5ad.2xlarge
+      - m5ad.4xlarge
+      - m5ad.12xlarge
+      - m5ad.24xlarge
+      - m5d.large
+      - m5d.xlarge
+      - m5d.2xlarge
+      - m5d.4xlarge
+      - m5d.8xlarge
+      - m5d.12xlarge
+      - m5d.16xlarge
+      - m5d.24xlarge
+      - m5d.metal
+      - p2.xlarge
+      - p2.8xlarge
+      - p2.16xlarge
+      - p3.2xlarge
+      - p3.8xlarge
+      - p3.16xlarge
+      - p3dn.24xlarge
+      - r3.large
+      - r3.xlarge
+      - r3.2xlarge
+      - r3.4xlarge
+      - r3.8xlarge
+      - r4.large
+      - r4.xlarge
+      - r4.2xlarge
+      - r4.4xlarge
+      - r4.8xlarge
+      - r4.16xlarge
+      - r5.large
+      - r5.xlarge
+      - r5.2xlarge
+      - r5.4xlarge
+      - r5.8xlarge
+      - r5.12xlarge
+      - r5.16xlarge
+      - r5.24xlarge
+      - r5.metal
+      - r5a.large
+      - r5a.xlarge
+      - r5a.2xlarge
+      - r5a.4xlarge
+      - r5a.8xlarge
+      - r5a.12xlarge
+      - r5a.16xlarge
+      - r5a.24xlarge
+      - r5ad.large
+      - r5ad.xlarge
+      - r5ad.2xlarge
+      - r5ad.4xlarge
+      - r5ad.12xlarge
+      - r5ad.24xlarge
+      - r5d.large
+      - r5d.xlarge
+      - r5d.2xlarge
+      - r5d.4xlarge
+      - r5d.8xlarge
+      - r5d.12xlarge
+      - r5d.16xlarge
+      - r5d.24xlarge
+      - r5d.metal
+      - t1.micro
+      - t2.nano
+      - t2.micro
+      - t2.small
+      - t2.medium
+      - t2.large
+      - t2.xlarge
+      - t2.2xlarge
+      - t3.nano
+      - t3.micro
+      - t3.small
+      - t3.medium
+      - t3.large
+      - t3.xlarge
+      - t3.2xlarge
+      - t3a.nano
+      - t3a.micro
+      - t3a.small
+      - t3a.medium
+      - t3a.large
+      - t3a.xlarge
+      - t3a.2xlarge
+      - u-6tb1.metal
+      - u-9tb1.metal
+      - u-12tb1.metal
+      - x1.16xlarge
+      - x1.32xlarge
+      - x1e.xlarge
+      - x1e.2xlarge
+      - x1e.4xlarge
+      - x1e.8xlarge
+      - x1e.16xlarge
+      - x1e.32xlarge
+      - z1d.large
+      - z1d.xlarge
+      - z1d.2xlarge
+      - z1d.3xlarge
+      - z1d.6xlarge
+      - z1d.12xlarge
+      - z1d.metal
+    ConstraintDescription: Must be a valid EC2 instance type
+    Description: EC2 instance type for the node instances
+  NodeVolumeSize:
+    Type: Number
+    Default: 20
+    Description: Node volume size
+  MountPoint:
+    Description: The Linux mount point for the EFS volume
+    Type: String
+    MinLength: '1'
+    Default: var/lib/jenkins
+  SonarMountPoint:
+    Description: The Linux mount point for the EFS volume for Sonar
+    Type: String
+    MinLength: '1'
+    Default: opt/sonar
+
+Metadata:
+  'AWS::CloudFormation::Interface':
+    ParameterGroups:
+      - Label:
+          default: Worker Network & Node Configuration
+        Parameters:
+          - EnvironmentPrefix
+          - VpcBlock
+          - BastionImageID
+          - LoadBalancerCertificateArn
+          - Subnet01Block
+          - Subnet02Block
+          - Subnet03Block
+          - Subnet04Block
+          - Subnet05Block
+          - Subnet06Block
+          - NodeGroupName
+          - NodeAutoScalingGroupMinSize
+          - NodeAutoScalingGroupDesiredCapacity
+          - NodeAutoScalingGroupMaxSize
+          - NodeInstanceType
+          - NodeImageId
+          - NodeVolumeSize
+          - KeyName
+          - MountPoint
+          - SonarMountPoint
+          - PolicyTargetValue
+
+Conditions:
+  HasLoadBalancerCertificateArn: !Not [!Equals [!Ref LoadBalancerCertificateArn, '']]
+
+Resources:
+  VPC:
+    Type: 'AWS::EC2::VPC'
+    Properties:
+      CidrBlock: !Ref VpcBlock
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentPrefix}-VPC'
+
+  InternetGateway:
+    Type: 'AWS::EC2::InternetGateway'
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentPrefix}-IG'
+
+  NatGateway1EIP:
+    Type: 'AWS::EC2::EIP'
+    DependsOn: VPCGatewayAttachment
+
+  NatGateway1:
+    Type: 'AWS::EC2::NatGateway'
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentPrefix}-NG'
+      AllocationId: !GetAtt NatGateway1EIP.AllocationId
+      SubnetId: !Ref Subnet01
+
+  VPCGatewayAttachment:
+    Type: 'AWS::EC2::VPCGatewayAttachment'
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref VPC
+
+  RouteTable:
+    Type: 'AWS::EC2::RouteTable'
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentPrefix}-Public-RT'
+        - Key: Network
+          Value: Public
+
+  RouteTablePrivate:
+    Type: 'AWS::EC2::RouteTable'
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentPrefix}-Private-RT'
+        - Key: Network
+          Value: Private
+
+  Route:
+    DependsOn: VPCGatewayAttachment
+    Type: 'AWS::EC2::Route'
+    Properties:
+      RouteTableId: !Ref RouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  RoutePrivate:
+    Type: 'AWS::EC2::Route'
+    Properties:
+      RouteTableId: !Ref RouteTablePrivate
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway1
+
+  Subnet01:
+    Type: 'AWS::EC2::Subnet'
+    Metadata:
+      Comment: Subnet 01
+    Properties:
+      AvailabilityZone: !Select
+        - '0'
+        - !GetAZs
+          Ref: 'AWS::Region'
+      CidrBlock: !Ref Subnet01Block
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentPrefix}-Pub-Subnet01'
+
+  Subnet02:
+    Type: 'AWS::EC2::Subnet'
+    Metadata:
+      Comment: Subnet 02
+    Properties:
+      AvailabilityZone: !Select
+        - '1'
+        - !GetAZs
+          Ref: 'AWS::Region'
+      CidrBlock: !Ref Subnet02Block
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentPrefix}-Pub-Subnet02'
+
+  Subnet03:
+    Type: 'AWS::EC2::Subnet'
+    Metadata:
+      Comment: Subnet 03
+    Properties:
+      AvailabilityZone: !Select
+        - '2'
+        - !GetAZs
+          Ref: 'AWS::Region'
+      CidrBlock: !Ref Subnet03Block
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentPrefix}-Pub-Subnet03'
+
+  Subnet04:
+    Type: 'AWS::EC2::Subnet'
+    Metadata:
+      Comment: Subnet 04
+    Properties:
+      AvailabilityZone: !Select
+        - '0'
+        - !GetAZs
+          Ref: 'AWS::Region'
+      CidrBlock: !Ref Subnet04Block
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentPrefix}-Pri-Subnet04'
+
+  Subnet05:
+    Type: 'AWS::EC2::Subnet'
+    Metadata:
+      Comment: Subnet 05
+    Properties:
+      AvailabilityZone: !Select
+        - '1'
+        - !GetAZs
+          Ref: 'AWS::Region'
+      CidrBlock: !Ref Subnet05Block
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentPrefix}-Pri-Subnet05'
+
+  Subnet06:
+    Type: 'AWS::EC2::Subnet'
+    Metadata:
+      Comment: Subnet 06
+    Properties:
+      AvailabilityZone: !Select
+        - '2'
+        - !GetAZs
+          Ref: 'AWS::Region'
+      CidrBlock: !Ref Subnet06Block
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentPrefix}-Pri-Subnet06'
+
+  Subnet01RouteTableAssociation:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      SubnetId: !Ref Subnet01
+      RouteTableId: !Ref RouteTable
+
+  Subnet02RouteTableAssociation:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      SubnetId: !Ref Subnet02
+      RouteTableId: !Ref RouteTable
+
+  Subnet03RouteTableAssociation:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      SubnetId: !Ref Subnet03
+      RouteTableId: !Ref RouteTable
+
+  Subnet04RouteTableAssociation:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      SubnetId: !Ref Subnet04
+      RouteTableId: !Ref RouteTablePrivate
+
+  Subnet05RouteTableAssociation:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      SubnetId: !Ref Subnet05
+      RouteTableId: !Ref RouteTablePrivate
+
+  Subnet06RouteTableAssociation:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      SubnetId: !Ref Subnet06
+      RouteTableId: !Ref RouteTablePrivate
+
+  ALBSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentPrefix}-ALB-SG'
+      GroupDescription: Cluster communication with worker nodes
+      VpcId: !Ref VPC
+
+  NodeInstanceRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentPrefix}-Node-IR'
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - "sts:AssumeRole"
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
+        - "arn:aws:iam::aws:policy/AmazonEC2FullAccess"
+      Path: /
+
+  CloudWatchPutMetricsRolePolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: CloudWatch_PutMetricData
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Sid: CloudWatchPutMetricData
+          Effect: Allow
+          Action:
+          - cloudwatch:PutMetricData
+          Resource:
+          - "*"
+      Roles:
+      - Ref: NodeInstanceRole
+
+  NodeInstanceProfile:
+    Type: "AWS::IAM::InstanceProfile"
+    Properties:
+      Path: /
+      Roles:
+        - Ref: NodeInstanceRole
+
+  NodeSecurityGroup:
+    Type: "AWS::EC2::SecurityGroup"
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentPrefix}-NSG'
+      GroupDescription: Security group for all nodes in the cluster
+      VpcId: !Ref VPC
+
+  NodeSecurityGroupIngress:
+    Type: "AWS::EC2::SecurityGroupIngress"
+    Properties:
+      Description: Allow node to communicate with each other
+      FromPort: 0
+      GroupId: !Ref NodeSecurityGroup
+      IpProtocol: "-1"
+      SourceSecurityGroupId: !Ref NodeSecurityGroup
+      ToPort: 65535
+
+  NodeBastionSecurityGroupIngress:
+    Type: "AWS::EC2::SecurityGroupIngress"
+    Properties:
+      Description: Allow node to communicate with each other
+      FromPort: 22
+      GroupId: !Ref NodeSecurityGroup
+      IpProtocol: "-1"
+      SourceSecurityGroupId: !Ref BastionSecurityGroup
+      ToPort: 22
+
+  ALBSecurityGroupIngress443:
+    Type: "AWS::EC2::SecurityGroupIngress"
+    Properties:
+      Description: Allow internet access through SSL
+      FromPort: 443
+      CidrIp: 0.0.0.0/0
+      GroupId: !Ref ALBSecurityGroup
+      IpProtocol: tcp
+      ToPort: 443
+
+  ALBSecurityGroupSelfIngress:
+    Type: "AWS::EC2::SecurityGroupIngress"
+    Properties:
+      Description: Allow internet access through SSL
+      FromPort: 0
+      GroupId: !Ref ALBSecurityGroup
+      IpProtocol: "-1"
+      SourceSecurityGroupId: !Ref NodeSecurityGroup
+      ToPort: 65535
+
+  ALBSecurityGroupIngress80Temp:
+    Type: "AWS::EC2::SecurityGroupIngress"
+    Properties:
+      Description: Allow internet access
+      FromPort: 80
+      CidrIp: 0.0.0.0/0
+      GroupId: !Ref ALBSecurityGroup
+      IpProtocol: tcp
+      ToPort: 80
+
+  ALBSecurityGroupToNodeSecurityGroupEgress:
+    Type: "AWS::EC2::SecurityGroupEgress"
+    Properties:
+      Description: Allow the alb to communicate with Jenkins
+      DestinationSecurityGroupId: !Ref NodeSecurityGroup
+      FromPort: 8080
+      GroupId: !Ref ALBSecurityGroup
+      IpProtocol: tcp
+      ToPort: 8080
+
+  ALBSecurityGroupToNodeSecurityGroupSonarEgress:
+    Type: "AWS::EC2::SecurityGroupEgress"
+    Properties:
+      Description: Allow the alb to communicate with Sonar
+      DestinationSecurityGroupId: !Ref NodeSecurityGroup
+      FromPort: 9000
+      GroupId: !Ref ALBSecurityGroup
+      IpProtocol: tcp
+      ToPort: 9000
+
+  ALBSecurityGroupToNodeSecurityGroupIngress:
+    Type: "AWS::EC2::SecurityGroupIngress"
+    Properties:
+      Description: Allow the alb to communicate with Jenkins
+      SourceSecurityGroupId: !Ref ALBSecurityGroup
+      FromPort: 8080
+      GroupId: !Ref NodeSecurityGroup
+      IpProtocol: tcp
+      ToPort: 8080
+
+  ALBSecurityGroupToNodeSecurityGroupSonarIngress:
+    Type: "AWS::EC2::SecurityGroupIngress"
+    Properties:
+      Description: Allow the alb to communicate with Sonar
+      SourceSecurityGroupId: !Ref ALBSecurityGroup
+      FromPort: 9000
+      GroupId: !Ref NodeSecurityGroup
+      IpProtocol: tcp
+      ToPort: 9000
+
+  NodeLaunchConfig:
+    Type: "AWS::AutoScaling::LaunchConfiguration"
+    Metadata:
+      AWS::CloudFormation::Init:
+        configSets:
+          MountConfig:
+          - setup
+          - mount
+        setup:
+          packages:
+            yum:
+              nfs-utils: []
+          files:
+            "/home/ec2-user/post_nfsstat":
+              content: !Sub |
+                #!/bin/bash
+
+                INPUT="$(cat)"
+                CW_JSON_OPEN='{ "Namespace": "EFS", "MetricData": [ '
+                CW_JSON_CLOSE=' ] }'
+                CW_JSON_METRIC=''
+                METRIC_COUNTER=0
+
+                for COL in 1 2 3 4 5 6; do
+
+                 COUNTER=0
+                 METRIC_FIELD=$COL
+                 DATA_FIELD=$(($COL+($COL-1)))
+
+                 while read line; do
+                   if [[ COUNTER -gt 0 ]]; then
+
+                     LINE=`echo $line | tr -s ' ' `
+                     AWS_COMMAND="aws cloudwatch put-metric-data --region ${AWS::Region}"
+                     MOD=$(( $COUNTER % 2))
+
+                     if [ $MOD -eq 1 ]; then
+                       METRIC_NAME=`echo $LINE | cut -d ' ' -f $METRIC_FIELD`
+                     else
+                       METRIC_VALUE=`echo $LINE | cut -d ' ' -f $DATA_FIELD`
+                     fi
+
+                     if [[ -n "$METRIC_NAME" && -n "$METRIC_VALUE" ]]; then
+                       INSTANCE_ID=$(curl -s http://169.254.169.254/latest/meta-data/instance-id)
+                       CW_JSON_METRIC="$CW_JSON_METRIC { \"MetricName\": \"$METRIC_NAME\", \"Dimensions\": [{\"Name\": \"InstanceId\", \"Value\": \"$INSTANCE_ID\"} ], \"Value\": $METRIC_VALUE },"
+                       unset METRIC_NAME
+                       unset METRIC_VALUE
+
+                       METRIC_COUNTER=$((METRIC_COUNTER+1))
+                       if [ $METRIC_COUNTER -eq 20 ]; then
+                         # 20 is max metric collection size, so we have to submit here
+                         aws cloudwatch put-metric-data --region ${AWS::Region} --cli-input-json "`echo $CW_JSON_OPEN ${!CW_JSON_METRIC%?} $CW_JSON_CLOSE`"
+
+                         # reset
+                         METRIC_COUNTER=0
+                         CW_JSON_METRIC=''
+                       fi
+                     fi
+                     COUNTER=$((COUNTER+1))
+                   fi
+
+                   if [[ "$line" == "Client nfs v4:" ]]; then
+                     # the next line is the good stuff
+                     COUNTER=$((COUNTER+1))
+                   fi
+                 done <<< "$INPUT"
+                done
+
+                # submit whatever is left
+                aws cloudwatch put-metric-data --region ${AWS::Region} --cli-input-json "`echo $CW_JSON_OPEN ${!CW_JSON_METRIC%?} $CW_JSON_CLOSE`"
+              mode: '000755'
+              owner: ec2-user
+              group: ec2-user
+            "/home/ec2-user/fstab_update":
+              content: !Sub |
+                #!/bin/bash
+                fstab=/etc/fstab
+                jenkinsEntry="${FileSystem}.efs.${AWS::Region}.amazonaws.com:/ /${MountPoint} nfs rw,hard,intr 0 0"
+                sonarEntry="${SonarFileSystem}.efs.${AWS::Region}.amazonaws.com:/ /${SonarMountPoint} nfs rw,hard,intr 0 0"
+                if [[ $(grep -q "${FileSystem}" "$fstab") ]]
+                then
+                    echo "Entry in fstab does not exists."
+                else
+                    echo "Entry in fstab exists."
+                    sed -i "\@$jenkinsEntry@d" /etc/fstab
+                fi
+                if [[ $(grep -q "${SonarFileSystem}" "$fstab") ]]
+                then
+                    echo "Entry in fstab does not exists."
+                else
+                    echo "Entry in fstab exists."
+                    sed -i "\@$sonarEntry@d" /etc/fstab
+                fi
+                echo "$jenkinsEntry" >> /etc/fstab
+                echo "$sonarEntry" >> /etc/fstab
+              mode: '000755'
+              owner: ec2-user
+              group: ec2-user
+            "/home/ec2-user/crontab":
+              content: "* * * * * /usr/sbin/nfsstat | /home/ec2-user/post_nfsstat\n"
+              owner: ec2-user
+              group: ec2-user
+          commands:
+            01_createdir:
+              command: !Sub "mkdir -p /${MountPoint}"
+            02_createdir_sonar:
+              command: !Sub "mkdir -p /${SonarMountPoint}"
+            03_update_fstab:
+              command: "/home/ec2-user/fstab_update"
+        mount:
+          commands:
+            01_mount:
+              command: !Sub >
+                mount -t nfs4 -o nfsvers=4.1 ${FileSystem}.efs.${AWS::Region}.amazonaws.com:/ /${MountPoint}
+            02_mount_sonar:
+              command: !Sub >
+                mount -t nfs4 -o nfsvers=4.1 ${SonarFileSystem}.efs.${AWS::Region}.amazonaws.com:/ /${SonarMountPoint}
+            03_permissions:
+              command: !Sub "chown jenkins:jenkins -R /${MountPoint}"
+            04_permissions_sonar:
+              command: !Sub "chown sonar:sonar -R /${SonarMountPoint}"
+            05_jenkins_restart:
+              command: "/etc/init.d/jenkins restart"
+            06_sonar_restart:
+              command: "/etc/init.d/sonar restart"
+    Properties:
+      AssociatePublicIpAddress: "false"
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            DeleteOnTermination: true
+            VolumeSize: !Ref NodeVolumeSize
+            VolumeType: gp2
+      IamInstanceProfile: !Ref NodeInstanceProfile
+      ImageId: !Ref NodeImageId
+      InstanceType: !Ref NodeInstanceType
+      KeyName: !Ref KeyName
+      SecurityGroups:
+        - Ref: NodeSecurityGroup
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash -xe
+          yum install -y aws-cfn-bootstrap
+          /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource NodeLaunchConfig --configsets MountConfig --region ${AWS::Region}
+          crontab /home/ec2-user/crontab
+          /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource NodeGroup --region ${AWS::Region}
+
+  NodeGroup:
+    Type: "AWS::AutoScaling::AutoScalingGroup"
+    Properties:
+      DesiredCapacity: !Ref NodeAutoScalingGroupDesiredCapacity
+      LaunchConfigurationName: !Ref NodeLaunchConfig
+      TargetGroupARNs:
+        - !Ref TargetGroup
+        - !Ref SonarTargetGroup
+      MaxSize: !Ref NodeAutoScalingGroupMaxSize
+      MinSize: !Ref NodeAutoScalingGroupMinSize
+      HealthCheckType: ELB
+      HealthCheckGracePeriod: 120
+      Tags:
+        - Key: Name
+          PropagateAtLaunch: "true"
+          Value: !Sub ${NodeGroupName}-Node
+      VPCZoneIdentifier:
+        - !Ref Subnet04
+        - !Ref Subnet05
+        - !Ref Subnet06
+    UpdatePolicy:
+      AutoScalingRollingUpdate:
+        MaxBatchSize: "1"
+        MinInstancesInService: !Ref NodeAutoScalingGroupDesiredCapacity
+        PauseTime: PT5M
+
+  myCPUPolicy:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AutoScalingGroupName: !Ref NodeGroup
+      PolicyType: TargetTrackingScaling
+      TargetTrackingConfiguration:
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ASGAverageCPUUtilization
+        TargetValue: !Ref PolicyTargetValue
+
+  FileSystem:
+    Type: AWS::EFS::FileSystem
+    Properties:
+      Encrypted: true
+      FileSystemTags:
+        - Key: Name
+          Value: !Sub "${EnvironmentPrefix}-Jenkins-FileSystem"
+      KmsKeyId: !GetAtt EFSKey.Arn
+
+  EFSKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentPrefix}-EFS-Key'
+      KeyPolicy:
+        Version: 2012-10-17
+        Id: key-default-1
+        Statement:
+          - Sid: Allow administration of the key
+            Effect: Allow
+            Principal:
+              AWS: !Join
+                - ''
+                - - 'arn:aws:iam::'
+                  - !Ref 'AWS::AccountId'
+                  - ':root'
+            Action:
+              - 'kms:*'
+            Resource: '*'
+
+  MountTargetSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId:
+        Ref: VPC
+      GroupDescription: Security group for mount target
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: '2049'
+        ToPort: '2049'
+        CidrIp: 0.0.0.0/0
+
+  MountTargetA:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId:
+        Ref: FileSystem
+      SubnetId:
+        Ref: Subnet04
+      SecurityGroups:
+      - Ref: MountTargetSecurityGroup
+
+  MountTargetB:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId:
+        Ref: FileSystem
+      SubnetId:
+        Ref: Subnet05
+      SecurityGroups:
+      - Ref: MountTargetSecurityGroup
+
+  MountTargetC:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId:
+        Ref: FileSystem
+      SubnetId:
+        Ref: Subnet06
+      SecurityGroups:
+      - Ref: MountTargetSecurityGroup
+
+  SonarFileSystem:
+    Type: AWS::EFS::FileSystem
+    Properties:
+      Encrypted: true
+      FileSystemTags:
+        - Key: Name
+          Value: !Sub "${EnvironmentPrefix}-Sonar-FileSystem"
+      KmsKeyId: !GetAtt SonarEFSKey.Arn
+
+  SonarEFSKey:
+    Type: AWS::KMS::Key
+    Properties:
+      KeyPolicy:
+        Version: 2012-10-17
+        Id: key-default-1
+        Statement:
+          - Sid: Allow administration of the key Sonar
+            Effect: Allow
+            Principal:
+              AWS: !Join
+                - ''
+                - - 'arn:aws:iam::'
+                  - !Ref 'AWS::AccountId'
+                  - ':root'
+            Action:
+              - 'kms:*'
+            Resource: '*'
+
+  SonarMountTargetSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId:
+        Ref: VPC
+      GroupDescription: Security group for Sonar mount target
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: '2049'
+        ToPort: '2049'
+        CidrIp: 0.0.0.0/0
+
+  SonarMountTargetA:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId:
+        Ref: SonarFileSystem
+      SubnetId:
+        Ref: Subnet04
+      SecurityGroups:
+      - Ref: SonarMountTargetSecurityGroup
+
+  SonarMountTargetB:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId:
+        Ref: SonarFileSystem
+      SubnetId:
+        Ref: Subnet05
+      SecurityGroups:
+      - Ref: SonarMountTargetSecurityGroup
+
+  SonarMountTargetC:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId:
+        Ref: SonarFileSystem
+      SubnetId:
+        Ref: Subnet06
+      SecurityGroups:
+      - Ref: SonarMountTargetSecurityGroup
+
+  JenkinsLoadBalancer:
+    Type: 'AWS::ElasticLoadBalancingV2::LoadBalancer'
+    Properties:
+      Scheme: internet-facing
+      SecurityGroups:
+        - !Ref ALBSecurityGroup
+      Subnets:
+        - !Ref Subnet01
+        - !Ref Subnet02
+        - !Ref Subnet03
+
+  TargetGroup:
+    Type: 'AWS::ElasticLoadBalancingV2::TargetGroup'
+    Properties:
+      TargetType: instance
+      HealthCheckEnabled: true
+      HealthCheckPath: /
+      HealthCheckPort: 8080
+      HealthCheckIntervalSeconds: 60
+      HealthCheckTimeoutSeconds: 55
+      HealthyThresholdCount: 3
+      Matcher:
+        HttpCode: "200,302,403,404"
+      Port: 8080
+      Protocol: HTTP
+      VpcId: !Ref VPC
+
+  SonarTargetGroup:
+    Type: 'AWS::ElasticLoadBalancingV2::TargetGroup'
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentPrefix}-Sonar-TG'
+      TargetType: instance
+      HealthCheckEnabled: true
+      HealthCheckPath: /
+      HealthCheckPort: 9000
+      HealthCheckIntervalSeconds: 60
+      HealthCheckTimeoutSeconds: 55
+      HealthyThresholdCount: 3
+      Matcher:
+        HttpCode: "200,302,403,404"
+      Port: 9000
+      Protocol: HTTP
+      VpcId: !Ref VPC
+
+  JenkinsHTTPListenerRule:
+    Type: 'AWS::ElasticLoadBalancingV2::ListenerRule'
+    Properties:
+      Actions:
+        - Type: forward
+          TargetGroupArn: !Ref TargetGroup
+      Conditions:
+        - Field: path-pattern
+          PathPatternConfig:
+            Values:
+              - /*
+      ListenerArn: !Ref HTTPListener
+      Priority: 3
+
+  SonarHTTPListenerRule:
+    Type: 'AWS::ElasticLoadBalancingV2::ListenerRule'
+    Properties:
+      Actions:
+        - Type: forward
+          TargetGroupArn: !Ref SonarTargetGroup
+      Conditions:
+        - Field: path-pattern
+          PathPatternConfig:
+            Values:
+              - /sonarqube/*
+      ListenerArn: !Ref HTTPListener
+      Priority: 2
+
+  HTTPListener:
+    Type: 'AWS::ElasticLoadBalancingV2::Listener'
+    Properties:
+      DefaultActions:
+        - TargetGroupArn: !Ref TargetGroup
+          Type: forward
+      LoadBalancerArn: !Ref JenkinsLoadBalancer
+      Port: 80
+      Protocol: HTTP
+
+  JenkinsHTTPSListenerRule:
+    Type: 'AWS::ElasticLoadBalancingV2::ListenerRule'
+    Condition: HasLoadBalancerCertificateArn
+    Properties:
+      Actions:
+        - Type: forward
+          TargetGroupArn: !Ref TargetGroup
+      Conditions:
+        - Field: path-pattern
+          PathPatternConfig:
+            Values:
+              - /*
+      ListenerArn: !Ref HTTPSListener
+      Priority: 3
+
+  SonarHTTPSListenerRule:
+    Type: 'AWS::ElasticLoadBalancingV2::ListenerRule'
+    Condition: HasLoadBalancerCertificateArn
+    Properties:
+      Actions:
+        - Type: forward
+          TargetGroupArn: !Ref SonarTargetGroup
+      Conditions:
+        - Field: path-pattern
+          PathPatternConfig:
+            Values:
+              - /sonarqube/*
+      ListenerArn: !Ref HTTPSListener
+      Priority: 2
+
+  HTTPSListener:
+    Type: 'AWS::ElasticLoadBalancingV2::Listener'
+    Condition: HasLoadBalancerCertificateArn
+    Properties:
+      Certificates:
+      - CertificateArn: !Ref LoadBalancerCertificateArn
+      DefaultActions:
+      - TargetGroupArn: !Ref TargetGroup
+        Type: forward
+      LoadBalancerArn: !Ref JenkinsLoadBalancer
+      Port: 443
+      Protocol: HTTPS
+
+  BastionSecurityGroup:
+    Type: "AWS::EC2::SecurityGroup"
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentPrefix}-Bastion-SG'
+      GroupDescription: Security group for bastion node
+      VpcId: !Ref VPC
+
+  BastionSecurityGroupIngress:
+    Type: "AWS::EC2::SecurityGroupIngress"
+    DependsOn: BastionSecurityGroup
+    Properties:
+      GroupId: !Ref BastionSecurityGroup
+      IpProtocol: tcp
+      FromPort: 22
+      ToPort: 22
+      CidrIp: '0.0.0.0/0'
+
+  BastionInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentPrefix}-BastionInstance'
+      ImageId: !Ref BastionImageID
+      InstanceType: t2.micro
+      KeyName:
+        Ref: "KeyName"
+      NetworkInterfaces:
+        - AssociatePublicIpAddress: "true"
+          DeviceIndex: "0"
+          GroupSet:
+            - Ref: "BastionSecurityGroup"
+          SubnetId:
+            Ref: "Subnet01"
+
+  devWebACL:
+    Type: AWS::WAFv2::WebACL
+    Properties:
+      Name: devWebACL
+      Scope: REGIONAL
+      Description: This is an example WebACL
+      DefaultAction:
+        Allow: {}
+      VisibilityConfig:
+        SampledRequestsEnabled: true
+        CloudWatchMetricsEnabled: true
+        MetricName: devALBWebACLMetric
+      Rules:
+        - Name: RuleWithAWSManagedRules
+          Priority: 0
+          OverrideAction:
+            Count: {}
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: RuleWithAWSManagedRulesMetric
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesCommonRuleSet
+              ExcludedRules: []
+        - Name: RuleWithAWSManagedLinuxnRules
+          Priority: 4
+          OverrideAction:
+            Count: {}
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: RuleWithAWSManagedLinuxRulesMetric
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesLinuxRuleSet
+              ExcludedRules: []
+        - Name: RuleWithAWSManagedIPReputationRules
+          Priority: 5
+          OverrideAction:
+            Count: {}
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: RuleWithAWSManagedIPReputationRulesMetric
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesAmazonIpReputationList
+              ExcludedRules: []
+        - Name: RuleWithAWSManagedAdminProtectionRules
+          Priority: 6
+          OverrideAction:
+            Count: {}
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: RuleWithAWSManagedAdminProtectionRulesMetric
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesAdminProtectionRuleSet
+              ExcludedRules: []
+        - Name: RuleWithAWSManagedKnownBadInputsRules
+          Priority: 2
+          OverrideAction:
+            Count: {}
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: RuleWithAWSManagedKnownBadInputsRulesMetric
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesKnownBadInputsRuleSet
+              ExcludedRules: []
+        - Name: RuleWithAWSManagedSQLInjectInputsRules
+          Priority: 3
+          OverrideAction:
+            Count: {}
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: RuleWithAWSManagedSQLInjectInputsRulesMetric
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesSQLiRuleSet
+              ExcludedRules: []
+        - Name: BlockXssAttack
+          Priority: 1
+          Action:
+            Block: {}
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: BlockXssAttackMetric
+          Statement:
+            XssMatchStatement:
+              FieldToMatch:
+                AllQueryArguments: {}
+              TextTransformations:
+                - Priority: 1
+                  Type: NONE
+
+  devWebACLAssociation:
+    Type: 'AWS::WAFv2::WebACLAssociation'
+    Properties:
+      WebACLArn: !GetAtt devWebACL.Arn
+      ResourceArn: !Ref JenkinsLoadBalancer
+
+Outputs:
+  SubnetIds:
+    Description: All subnets in the VPC
+    Value: !Join
+      - ','
+      - - !Ref Subnet04
+        - !Ref Subnet05
+        - !Ref Subnet06
+    Export:
+      Name:
+        Fn::Sub: "${AWS::StackName}-SubnetIds"
+
+  SecurityGroups:
+    Description: >-
+      Security group for the cluster control plane communication with worker
+      nodes
+    Value: !Join
+      - ','
+      - - !Ref ALBSecurityGroup
+    Export:
+      Name:
+        Fn::Sub: "${AWS::StackName}-SecurityGroups"
+
+  VpcId:
+    Description: The VPC Id
+    Value: !Ref VPC
+    Export:
+      Name:
+        Fn::Sub: "${AWS::StackName}-VpcId"
+
+  AllSubnetIds:
+    Description: All subnets in the VPC
+    Value: !Join
+      - ','
+      - - !Ref Subnet01
+        - !Ref Subnet02
+        - !Ref Subnet03
+        - !Ref Subnet04
+        - !Ref Subnet05
+        - !Ref Subnet06
+    Export:
+      Name:
+        Fn::Sub: "${AWS::StackName}-AllSubnetIds"
+
+  NodeInstanceRole:
+    Description: The node instance role
+    Value: !GetAtt NodeInstanceRole.Arn
+
+  NodeSecurityGroup:
+    Description: The security group for the node group
+    Value: !Ref NodeSecurityGroup
+
+  NodeGroup:
+    Description: The NodeGroup for the node group
+    Value: !Ref NodeGroup
