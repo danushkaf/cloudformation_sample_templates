@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: Configure ES Log rollover
+Description: Delete Datasync resources from destination region.
 Parameters:
   DestinationRegion:
     Type: String
