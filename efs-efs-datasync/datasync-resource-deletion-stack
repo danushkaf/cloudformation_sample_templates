@@ -1,0 +1,124 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Configure ES Log rollover
+Parameters:
+  DestinationRegion:
+    Type: String
+    Description: Destination Region
+  DataSyncStackName:
+    Type: String
+    Description: Stack Name of datasync stack
+  DataSyncStack:
+    Type: String
+    Description: Stack ID of datasync stack
+Metadata:
+  'AWS::CloudFormation::Interface':
+    ParameterGroups:
+      - Label:
+          default: Configurations
+        Parameters:
+          - DestinationRegion
+          - DataSyncStackName
+          - DataSyncStack
+Resources:
+  LambdaExecutionRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Policies:
+      - PolicyName: datasync-all
+        PolicyDocument:
+          Version: 2012-10-17
+          Statement:
+          - Effect: Allow
+            Action:
+              - datasync:*
+              - logs:DeleteLogGroup
+            Resource: '*'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
+      Path: /
+  DeleteDataSyncResourcesFunction:
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      Runtime: python3.7
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Handler: index.lambda_handler
+      MemorySize: 128
+      Timeout: 120
+      Code:
+        ZipFile: !Sub |
+          import json
+          import boto3
+          datasync = boto3.client('datasync', region_name='${DestinationRegion}')
+          logClient = boto3.client('logs', region_name='eu-west-1')
+          def lambda_handler(event, context):
+              # Tasks
+              task_objs = datasync.list_tasks(
+                MaxResults=100,
+              )
+              for task in task_objs['Tasks']:
+                if task['Name'].startswith('Stack:${DataSyncStackName}'):
+                  datasync.delete_task(TaskArn=task['TaskArn'])
+              # Locations
+              loc_objs = datasync.list_locations(
+                MaxResults=100,
+              )
+              for loc in loc_objs['Locations']:
+                loc_tags = datasync.list_tags_for_resource(
+                  ResourceArn=loc['LocationArn'],
+                  MaxResults=100,
+                )
+                for loc_tag in loc_tags['Tags']:
+                  if 'StackName' == loc_tag['Key'] or '${DataSyncStackName}' == loc_tag['Value']:
+                    datasync.delete_location(LocationArn=loc['LocationArn'])
+              # Agents
+              agent_objs = datasync.list_agents(
+                MaxResults=100,
+              )
+              for agent in agent_objs['Agents']:
+                agent_tags = datasync.list_tags_for_resource(
+                  ResourceArn=agent['AgentArn'],
+                  MaxResults=100,
+                )
+                for agent_tag in agent_tags['Tags']:
+                  if 'StackName' == agent_tag['Key'] or '${DataSyncStackName}' == agent_tag['Value']:
+                    datasync.delete_agent(AgentArn=agent['AgentArn'])
+              # Log group
+              logClient.delete_log_group(logGroupName='/aws/data-sync/${DataSyncStackName}')
+      Description: Invoke function during stack deletion to delete datasync resources.
+  CloudWatchSubscriptionFunctionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt DeleteDataSyncResourcesFunction.Arn
+      Action: 'lambda:InvokeFunction'
+      Principal: 'events.amazonaws.com'
+      SourceArn: !GetAtt CloudWatchDataSyncResourceDeleteRule.Arn
+  CloudWatchDataSyncResourceDeleteRule:
+    Type: 'AWS::Events::Rule'
+    Properties:
+      Description: 'Delete Datasync Resources'
+      EventPattern:
+        source:
+          - "aws.cloudformation"
+        detail-type:
+          - "AWS API Call via CloudTrail"
+        detail:
+          eventSource:
+            - "cloudformation.amazonaws.com"
+          eventName:
+            - "DeleteStack"
+          requestParameters:
+            stackName:
+              - !Ref DataSyncStack
+      State: 'ENABLED'
+      Targets:
+        - Id: 'Delete-DataSync-Resources'
+          Arn: !GetAtt DeleteDataSyncResourcesFunction.Arn
