@@ -3694,7 +3694,6 @@ Resources:
           #!/bin/bash -xe
           yum install -y aws-cfn-bootstrap
           /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource SonarNodeLaunchConfig --configsets SonarConfig --region ${AWS::Region}
-          crontab /home/ec2-user/crontab
           /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource SonarNodeGroup --region ${AWS::Region}
 
   SonarNodeGroup:
