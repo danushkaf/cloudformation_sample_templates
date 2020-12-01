@@ -1091,6 +1091,7 @@ Parameters:
     Description: Slave AMI Parameter Path	
     Type: String	
     Default: /GoldenAMI/cicd/slave/latest	
+
 Metadata:	
   'AWS::CloudFormation::Interface':	
     ParameterGroups:	
@@ -1165,11 +1166,13 @@ Metadata:
         Parameters:	
           - CodeArtifactDomain	
           - CodeArtifactRepoName	
+
 Conditions:	
   HasDomainName: !Not [!Equals [!Ref DomainName, '']]	
   DBReplicationRequired: !Equals	
     - !Ref DatabaseReplication	
     - 'Required'	
+
 Resources:	
   JenkinsAMIIDParameter:	
     Type: AWS::SSM::Parameter	
@@ -1180,6 +1183,7 @@ Resources:
       Description: SSM Parameter for jenkins image.	
       Tags:	
         Logical_Name: !Sub "${EnvironmentPrefix}-jenkins-image"	
+
   SonarAMIIDParameter:	
     Type: AWS::SSM::Parameter	
     Properties:	
@@ -1189,6 +1193,7 @@ Resources:
       Description: SSM Parameter for sonar image.	
       Tags:	
         Logical_Name: !Sub "${EnvironmentPrefix}-sonar-image"	
+
   BastionAMIIDParameter:	
     Type: AWS::SSM::Parameter	
     Properties:	
@@ -1198,6 +1203,7 @@ Resources:
       Description: SSM Parameter for bastion image.	
       Tags:	
         Logical_Name: !Sub "${EnvironmentPrefix}-bastion-image"	
+
   SlaveAMIIDParameter:	
     Type: AWS::SSM::Parameter	
     Properties:	
@@ -1207,6 +1213,7 @@ Resources:
       Description: SSM Parameter for jenkins slave image.	
       Tags:	
         Logical_Name: !Sub "${EnvironmentPrefix}-slave-image"	
+
   Certificate:	
     Condition: HasDomainName	
     Type: AWS::CertificateManager::Certificate	
@@ -1218,6 +1225,7 @@ Resources:
         - DomainName: !Ref DomainName	
           HostedZoneId: !Ref HostedZoneId	
       ValidationMethod: DNS	
+
   VPC:	
     Type: 'AWS::EC2::VPC'	
     Properties:	
@@ -1227,15 +1235,18 @@ Resources:
       Tags:	
         - Key: Name	
           Value: !Sub '${EnvironmentPrefix}-VPC'	
+
   InternetGateway:	
     Type: 'AWS::EC2::InternetGateway'	
     Properties:	
       Tags:	
         - Key: Name	
           Value: !Sub '${EnvironmentPrefix}-IG'	
+
   NatGateway1EIP:	
     Type: 'AWS::EC2::EIP'	
     DependsOn: VPCGatewayAttachment	
+
   NatGateway1:	
     Type: 'AWS::EC2::NatGateway'	
     Properties:	
@@ -1244,11 +1255,13 @@ Resources:
           Value: !Sub '${EnvironmentPrefix}-NG'	
       AllocationId: !GetAtt NatGateway1EIP.AllocationId	
       SubnetId: !Ref Subnet01	
+
   VPCGatewayAttachment:	
     Type: 'AWS::EC2::VPCGatewayAttachment'	
     Properties:	
       InternetGatewayId: !Ref InternetGateway	
       VpcId: !Ref VPC	
+
   RouteTable:	
     Type: 'AWS::EC2::RouteTable'	
     Properties:	
@@ -1258,6 +1271,7 @@ Resources:
           Value: !Sub '${EnvironmentPrefix}-Public-RT'	
         - Key: Network	
           Value: Public	
+
   RouteTablePrivate:	
     Type: 'AWS::EC2::RouteTable'	
     Properties:	
@@ -1267,6 +1281,7 @@ Resources:
           Value: !Sub '${EnvironmentPrefix}-Private-RT'	
         - Key: Network	
           Value: Private	
+
   Route:	
     DependsOn: VPCGatewayAttachment	
     Type: 'AWS::EC2::Route'	
@@ -1274,12 +1289,14 @@ Resources:
       RouteTableId: !Ref RouteTable	
       DestinationCidrBlock: 0.0.0.0/0	
       GatewayId: !Ref InternetGateway	
+
   RoutePrivate:	
     Type: 'AWS::EC2::Route'	
     Properties:	
       RouteTableId: !Ref RouteTablePrivate	
       DestinationCidrBlock: 0.0.0.0/0	
       NatGatewayId: !Ref NatGateway1	
+
   Subnet01:	
     Type: 'AWS::EC2::Subnet'	
     Metadata:	
@@ -1294,6 +1311,7 @@ Resources:
       Tags:	
         - Key: Name	
           Value: !Sub '${EnvironmentPrefix}-Pub-Subnet01'	
+
   Subnet02:	
     Type: 'AWS::EC2::Subnet'	
     Metadata:	
@@ -1308,6 +1326,7 @@ Resources:
       Tags:	
         - Key: Name	
           Value: !Sub '${EnvironmentPrefix}-Pub-Subnet02'	
+
   Subnet03:	
     Type: 'AWS::EC2::Subnet'	
     Metadata:	
@@ -1322,6 +1341,7 @@ Resources:
       Tags:	
         - Key: Name	
           Value: !Sub '${EnvironmentPrefix}-Pub-Subnet03'	
+
   Subnet04:	
     Type: 'AWS::EC2::Subnet'	
     Metadata:	
@@ -1336,6 +1356,7 @@ Resources:
       Tags:	
         - Key: Name	
           Value: !Sub '${EnvironmentPrefix}-Pri-Subnet04'	
+
   Subnet05:	
     Type: 'AWS::EC2::Subnet'	
     Metadata:	
@@ -1350,6 +1371,7 @@ Resources:
       Tags:	
         - Key: Name	
           Value: !Sub '${EnvironmentPrefix}-Pri-Subnet05'	
+
   Subnet06:	
     Type: 'AWS::EC2::Subnet'	
     Metadata:	
@@ -1364,36 +1386,43 @@ Resources:
       Tags:	
         - Key: Name	
           Value: !Sub '${EnvironmentPrefix}-Pri-Subnet06'	
+
   Subnet01RouteTableAssociation:	
     Type: 'AWS::EC2::SubnetRouteTableAssociation'	
     Properties:	
       SubnetId: !Ref Subnet01	
       RouteTableId: !Ref RouteTable	
+
   Subnet02RouteTableAssociation:	
     Type: 'AWS::EC2::SubnetRouteTableAssociation'	
     Properties:	
       SubnetId: !Ref Subnet02	
       RouteTableId: !Ref RouteTable	
+
   Subnet03RouteTableAssociation:	
     Type: 'AWS::EC2::SubnetRouteTableAssociation'	
     Properties:	
       SubnetId: !Ref Subnet03	
       RouteTableId: !Ref RouteTable	
+
   Subnet04RouteTableAssociation:	
     Type: 'AWS::EC2::SubnetRouteTableAssociation'	
     Properties:	
       SubnetId: !Ref Subnet04	
       RouteTableId: !Ref RouteTablePrivate	
+
   Subnet05RouteTableAssociation:	
     Type: 'AWS::EC2::SubnetRouteTableAssociation'	
     Properties:	
       SubnetId: !Ref Subnet05	
       RouteTableId: !Ref RouteTablePrivate	
+
   Subnet06RouteTableAssociation:	
     Type: 'AWS::EC2::SubnetRouteTableAssociation'	
     Properties:	
       SubnetId: !Ref Subnet06	
       RouteTableId: !Ref RouteTablePrivate	
+
   ALBSecurityGroup:	
     Type: 'AWS::EC2::SecurityGroup'	
     Properties:	
@@ -1402,6 +1431,7 @@ Resources:
           Value: !Sub '${EnvironmentPrefix}-ALB-SG'	
       GroupDescription: Cluster communication with worker nodes	
       VpcId: !Ref VPC	
+
   NodeInstanceRole:	
     Type: "AWS::IAM::Role"	
     Properties:	
@@ -1423,6 +1453,7 @@ Resources:
         - "arn:aws:iam::aws:policy/AmazonS3FullAccess"	
         - "arn:aws:iam::aws:policy/service-role/AmazonEC2RoleforSSM"	
       Path: /	
+
   AssumePolicy:	
     Type: AWS::IAM::ManagedPolicy	
     Properties:	
@@ -1436,6 +1467,7 @@ Resources:
           Action:	
           - sts:AssumeRole	
           Resource: "*"	
+
   CloudWatchPutMetricsRolePolicy:	
     Type: AWS::IAM::Policy	
     Properties:	
@@ -1451,6 +1483,7 @@ Resources:
           - "*"	
       Roles:	
       - Ref: NodeInstanceRole	
+
   PassRolePolicy:	
     Type: AWS::IAM::Policy	
     Properties:	
@@ -1466,6 +1499,7 @@ Resources:
           - "*"	
       Roles:	
       - Ref: NodeInstanceRole	
+
   LambdaSSMRole:	
     Type: "AWS::IAM::Role"	
     Properties:	
@@ -1487,6 +1521,7 @@ Resources:
         - "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"	
         - "arn:aws:iam::aws:policy/AmazonEC2FullAccess"	
       Path: /	
+
   AutomationServiceRole:	
     Type: "AWS::IAM::Role"	
     Properties:	
@@ -1510,6 +1545,7 @@ Resources:
         - "arn:aws:iam::aws:policy/AmazonEC2FullAccess"	
         - "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"	
       Path: /	
+
   SSMPassRolePolicy:	
     Type: AWS::IAM::Policy	
     Properties:	
@@ -1525,6 +1561,7 @@ Resources:
           - !GetAtt NodeInstanceRole.Arn	
       Roles:	
       - Ref: AutomationServiceRole	
+
   LambdaInvokePolicy:	
     Type: AWS::IAM::Policy	
     Properties:	
@@ -1540,12 +1577,14 @@ Resources:
           - "*"	
       Roles:	
       - Ref: AutomationServiceRole	
+
   NodeInstanceProfile:	
     Type: "AWS::IAM::InstanceProfile"	
     Properties:	
       Path: /	
       Roles:	
         - Ref: NodeInstanceRole	
+
   NodeSecurityGroup:	
     Type: "AWS::EC2::SecurityGroup"	
     Properties:	
@@ -1554,6 +1593,7 @@ Resources:
           Value: !Sub '${EnvironmentPrefix}-NSG'	
       GroupDescription: Security group for all nodes in the cluster	
       VpcId: !Ref VPC	
+
   NodeSecurityGroupIngress:	
     Type: "AWS::EC2::SecurityGroupIngress"	
     Properties:	
@@ -1563,6 +1603,7 @@ Resources:
       IpProtocol: "-1"	
       SourceSecurityGroupId: !Ref NodeSecurityGroup	
       ToPort: 65535	
+
   NodeBastionSecurityGroupIngress:	
     Type: "AWS::EC2::SecurityGroupIngress"	
     Properties:	
@@ -1572,6 +1613,7 @@ Resources:
       IpProtocol: "-1"	
       SourceSecurityGroupId: !Ref BastionSecurityGroup	
       ToPort: 22	
+
   ALBSecurityGroupIngress443:	
     Type: "AWS::EC2::SecurityGroupIngress"	
     Properties:	
@@ -1581,6 +1623,7 @@ Resources:
       GroupId: !Ref ALBSecurityGroup	
       IpProtocol: tcp	
       ToPort: 443	
+
   ALBSecurityGroupSelfIngress:	
     Type: "AWS::EC2::SecurityGroupIngress"	
     Properties:	
@@ -1590,6 +1633,7 @@ Resources:
       IpProtocol: "-1"	
       SourceSecurityGroupId: !Ref NodeSecurityGroup	
       ToPort: 65535	
+
   ALBSecurityGroupIngress80Temp:	
     Type: "AWS::EC2::SecurityGroupIngress"	
     Properties:	
@@ -1599,6 +1643,7 @@ Resources:
       GroupId: !Ref ALBSecurityGroup	
       IpProtocol: tcp	
       ToPort: 80	
+
   ALBSecurityGroupToNodeSecurityGroupEgress:	
     Type: "AWS::EC2::SecurityGroupEgress"	
     Properties:	
@@ -1608,6 +1653,7 @@ Resources:
       GroupId: !Ref ALBSecurityGroup	
       IpProtocol: tcp	
       ToPort: 8080	
+
   ALBSecurityGroupToNodeSecurityGroupSonarEgress:	
     Type: "AWS::EC2::SecurityGroupEgress"	
     Properties:	
@@ -1617,6 +1663,7 @@ Resources:
       GroupId: !Ref ALBSecurityGroup	
       IpProtocol: tcp	
       ToPort: 9000	
+
   ALBSecurityGroupToNodeSecurityGroupIngress:	
     Type: "AWS::EC2::SecurityGroupIngress"	
     Properties:	
@@ -1626,6 +1673,7 @@ Resources:
       GroupId: !Ref NodeSecurityGroup	
       IpProtocol: tcp	
       ToPort: 8080	
+
   ALBSecurityGroupToNodeSecurityGroupSonarIngress:	
     Type: "AWS::EC2::SecurityGroupIngress"	
     Properties:	
@@ -1635,11 +1683,13 @@ Resources:
       GroupId: !Ref NodeSecurityGroup	
       IpProtocol: tcp	
       ToPort: 9000	
+
   ADBSecurityGroup:	
     Type: "AWS::EC2::SecurityGroup"	
     Properties:	
       GroupDescription: Security group for db	
       VpcId: !Ref VPC	
+
   ADBSecurityGroupIngress:	
     Type: "AWS::EC2::SecurityGroupIngress"	
     DependsOn: ADBSecurityGroup	
@@ -1650,6 +1700,7 @@ Resources:
       IpProtocol: tcp	
       SourceSecurityGroupId: !Ref NodeSecurityGroup	
       ToPort: 3306	
+
   DatabaseSubnetGroup:	
     Type: AWS::RDS::DBSubnetGroup	
     Properties:	
@@ -1658,6 +1709,7 @@ Resources:
         - !Ref Subnet04	
         - !Ref Subnet05	
         - !Ref Subnet06	
+
   DatabaseCluster:	
     Type: AWS::RDS::DBCluster	
     Properties:	
@@ -1679,6 +1731,7 @@ Resources:
          -	
             Key: "Cluster Name"	
             Value: !Ref "DBClusterIdentifier"	
+
   DatabasePrimaryInstance:	
     Type: AWS::RDS::DBInstance	
     Properties:	
@@ -1691,6 +1744,7 @@ Resources:
          -	
             Key: "Cluster Name"	
             Value: !Ref "DBClusterIdentifier"	
+
   AutoScalerTarget:	
     Condition: DBReplicationRequired	
     DependsOn: DatabaseCluster	
@@ -1702,6 +1756,7 @@ Resources:
       ScalableDimension: rds:cluster:ReadReplicaCount	
       ServiceNamespace: rds	
       RoleARN: !Sub "arn:aws:iam::${AWS::AccountId}:role/aws-service-role/rds.application-autoscaling.amazonaws.com/AWSServiceRoleForApplicationAutoScaling_RDSCluster"	
+
   AutoScaler:	
     Condition: DBReplicationRequired	
     Type: AWS::ApplicationAutoScaling::ScalingPolicy	
@@ -1716,6 +1771,7 @@ Resources:
         ScaleOutCooldown: 300	
         ScaleInCooldown: 300	
         DisableScaleIn: False	
+
   UpdateSSMParamFunction:	
     Type: AWS::Lambda::Function	
     Properties:	
@@ -1768,6 +1824,7 @@ Resources:
       MemorySize: 1024	
       Timeout: 120	
       Handler: index.lambda_handler	
+
   UpdateSSMParamFunctionPermission:	
     Type: AWS::Lambda::Permission	
     Properties:	
@@ -1777,6 +1834,7 @@ Resources:
           - "Arn"	
       Action: 'lambda:InvokeFunction'	
       Principal: 'ssm.amazonaws.com'	
+
   DeleteAMIFunction:	
     Type: AWS::Lambda::Function	
     Properties:	
@@ -1842,6 +1900,7 @@ Resources:
       MemorySize: 1024	
       Timeout: 900	
       Handler: index.cloudformation_handler	
+
   DeleteAMIFunctionPermission:	
     Type: AWS::Lambda::Permission	
     Properties:	
@@ -1851,6 +1910,7 @@ Resources:
           - "Arn"	
       Action: 'lambda:InvokeFunction'	
       Principal: 'ssm.amazonaws.com'	
+
   AMIAutomationInvokerFunction:	
     Type: AWS::Lambda::Function	
     Properties:	
@@ -1882,6 +1942,7 @@ Resources:
       MemorySize: 1024	
       Timeout: 60	
       Handler: index.lambda_handler	
+
   AMIAutomationCallbackFunction:	
     Type: AWS::Lambda::Function	
     Properties:	
@@ -1918,6 +1979,7 @@ Resources:
       MemorySize: 1024	
       Timeout: 60	
       Handler: index.lambda_handler	
+
   CreateJenkinsImage:	
     Type: Custom::CreateJenkinsImage	
     DependsOn:	
@@ -1937,6 +1999,7 @@ Resources:
         - Arn	
       Region:	
         Ref: AWS::Region	
+
   CreateJenkinsSlaveImage:	
     Type: Custom::CreateJenkinsSlaveImage	
     DependsOn:	
@@ -1956,6 +2019,7 @@ Resources:
         - Arn	
       Region:	
         Ref: AWS::Region	
+
   CreateBastionImage:	
     Type: Custom::CreateBastionImage	
     DependsOn:	
@@ -1975,6 +2039,7 @@ Resources:
         - Arn	
       Region:	
         Ref: AWS::Region	
+
   CreateSonarImage:	
     Type: Custom::CreateSonarImage	
     DependsOn:	
@@ -1994,6 +2059,7 @@ Resources:
         - Arn	
       Region:	
         Ref: AWS::Region	
+
   JenkinsGoldenAMICreateSSMDocument:	
     Type: AWS::SSM::Document	
     Properties:	
@@ -2223,6 +2289,7 @@ Resources:
             Payload: '{"ResponseURL":"{{ResponseURL}}", "StackId":"{{StackId}}", "LogicalResourceId":"{{LogicalResourceId}}", "RequestId":"{{RequestId}}", "PhysicalResourceId":"{{createEncryptedCopy.ImageId}}"}'	
         outputs:	
         - createEncryptedCopy.ImageId	
+
   SonarGoldenAMICreateSSMDocument:	
     Type: AWS::SSM::Document	
     Properties:	
@@ -2472,6 +2539,7 @@ Resources:
             Payload: '{"ResponseURL":"{{ResponseURL}}", "StackId":"{{StackId}}", "LogicalResourceId":"{{LogicalResourceId}}", "RequestId":"{{RequestId}}", "PhysicalResourceId":"{{createEncryptedCopy.ImageId}}"}'	
         outputs:	
         - createEncryptedCopy.ImageId	
+
   JenkinsSlaveGoldenAMICreateSSMDocument:	
     Type: AWS::SSM::Document	
     Properties:	
@@ -2694,6 +2762,7 @@ Resources:
             Payload: '{"ResponseURL":"{{ResponseURL}}", "StackId":"{{StackId}}", "LogicalResourceId":"{{LogicalResourceId}}", "RequestId":"{{RequestId}}", "PhysicalResourceId":"{{createEncryptedCopy.ImageId}}"}'	
         outputs:	
         - createEncryptedCopy.ImageId	
+
   BastionGoldenAMICreateSSMDocument:	
     Type: AWS::SSM::Document	
     Properties:	
@@ -2961,8 +3030,10 @@ Resources:
             Payload: '{"ResponseURL":"{{ResponseURL}}", "StackId":"{{StackId}}", "LogicalResourceId":"{{LogicalResourceId}}", "RequestId":"{{RequestId}}", "PhysicalResourceId":"{{createEncryptedCopy.ImageId}}"}'	
         outputs:	
         - createEncryptedCopy.ImageId	
+
   WaitHandle:	
     Type: AWS::CloudFormation::WaitConditionHandle	
+
   WaitCondition:	
     DependsOn:	
       - NodeLaunchConfig	
@@ -2971,6 +3042,7 @@ Resources:
       Handle: !Ref WaitHandle	
       Timeout: '7200'	
       Count: 2	
+
   NodeLaunchConfig:	
     Type: "AWS::AutoScaling::LaunchConfiguration"	
     DependsOn:	
@@ -3525,6 +3597,7 @@ Resources:
           /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource NodeLaunchConfig --configsets MountConfig --region ${AWS::Region}	
           crontab /home/ec2-user/crontab	
           /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --region ${AWS::Region} '${WaitHandle}'	
+
   NodeGroup:	
     Type: "AWS::AutoScaling::AutoScalingGroup"	
     Properties:	
@@ -3549,6 +3622,7 @@ Resources:
         MaxBatchSize: "1"	
         MinInstancesInService: !Ref NodeAutoScalingGroupDesiredCapacity	
         PauseTime: PT5M	
+
   SonarNodeLaunchConfig:	
     Type: "AWS::AutoScaling::LaunchConfiguration"	
     DependsOn:	
@@ -3607,6 +3681,7 @@ Resources:
           /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource SonarNodeLaunchConfig --configsets SonarConfig --region ${AWS::Region}	
           crontab /home/ec2-user/crontab	
           /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --region ${AWS::Region} '${WaitHandle}'	
+
   SonarNodeGroup:	
     Type: "AWS::AutoScaling::AutoScalingGroup"	
     Properties:	
@@ -3631,6 +3706,7 @@ Resources:
         MaxBatchSize: "1"	
         MinInstancesInService: !Ref NodeAutoScalingGroupDesiredCapacity	
         PauseTime: PT5M	
+
   myCPUPolicy:	
     Type: AWS::AutoScaling::ScalingPolicy	
     Properties:	
@@ -3640,6 +3716,7 @@ Resources:
         PredefinedMetricSpecification:	
           PredefinedMetricType: ASGAverageCPUUtilization	
         TargetValue: !Ref PolicyTargetValue	
+
   FileSystem:	
     Type: AWS::EFS::FileSystem	
     Properties:	
@@ -3650,6 +3727,7 @@ Resources:
         - Key: "backup"	
           Value: "daily"	
       KmsKeyId: !GetAtt EFSKey.Arn	
+
   EFSKey:	
     Type: AWS::KMS::Key	
     Properties:	
@@ -3671,6 +3749,7 @@ Resources:
             Action:	
               - 'kms:*'	
             Resource: '*'	
+
   MountTargetSecurityGroup:	
     Type: AWS::EC2::SecurityGroup	
     Properties:	
@@ -3682,6 +3761,7 @@ Resources:
         FromPort: '2049'	
         ToPort: '2049'	
         CidrIp: 0.0.0.0/0	
+
   MountTargetA:	
     Type: AWS::EFS::MountTarget	
     Properties:	
@@ -3691,6 +3771,7 @@ Resources:
         Ref: Subnet04	
       SecurityGroups:	
       - Ref: MountTargetSecurityGroup	
+
   MountTargetB:	
     Type: AWS::EFS::MountTarget	
     Properties:	
@@ -3700,6 +3781,7 @@ Resources:
         Ref: Subnet05	
       SecurityGroups:	
       - Ref: MountTargetSecurityGroup	
+
   MountTargetC:	
     Type: AWS::EFS::MountTarget	
     Properties:	
@@ -3709,6 +3791,7 @@ Resources:
         Ref: Subnet06	
       SecurityGroups:	
       - Ref: MountTargetSecurityGroup	
+
   JenkinsLoadBalancer:	
     Type: 'AWS::ElasticLoadBalancingV2::LoadBalancer'	
     Properties:	
@@ -3719,6 +3802,7 @@ Resources:
         - !Ref Subnet01	
         - !Ref Subnet02	
         - !Ref Subnet03	
+
   CICDLBDNSRecord:	
     Condition: HasDomainName	
     Type: AWS::Route53::RecordSet	
@@ -3730,6 +3814,7 @@ Resources:
       Name: !Sub cicd.${DomainName}	
       HostedZoneId:  !Ref HostedZoneId	
       Type: A	
+
   TargetGroup:	
     Type: 'AWS::ElasticLoadBalancingV2::TargetGroup'	
     Properties:	
@@ -3746,6 +3831,7 @@ Resources:
       Port: 8080	
       Protocol: HTTP	
       VpcId: !Ref VPC	
+
   SonarTargetGroup:	
     Type: 'AWS::ElasticLoadBalancingV2::TargetGroup'	
     Properties:	
@@ -3764,6 +3850,7 @@ Resources:
       Port: 9000	
       Protocol: HTTP	
       VpcId: !Ref VPC	
+
   JenkinsHTTPListenerRule:	
     Type: 'AWS::ElasticLoadBalancingV2::ListenerRule'	
     Properties:	
@@ -3777,6 +3864,7 @@ Resources:
               - /*	
       ListenerArn: !Ref HTTPListener	
       Priority: 4	
+
   SonarHTTPListenerRule:	
     Type: 'AWS::ElasticLoadBalancingV2::ListenerRule'	
     Properties:	
@@ -3790,6 +3878,7 @@ Resources:
               - /sonarqube/*	
       ListenerArn: !Ref HTTPListener	
       Priority: 2	
+
   HTTPListener:	
     Type: 'AWS::ElasticLoadBalancingV2::Listener'	
     Properties:	
@@ -3799,6 +3888,7 @@ Resources:
       LoadBalancerArn: !Ref JenkinsLoadBalancer	
       Port: 80	
       Protocol: HTTP	
+
   JenkinsHTTPSListenerRule:	
     Type: 'AWS::ElasticLoadBalancingV2::ListenerRule'	
     Condition: HasDomainName	
@@ -3813,6 +3903,7 @@ Resources:
               - /*	
       ListenerArn: !Ref HTTPSListener	
       Priority: 4	
+
   SonarHTTPSListenerRule:	
     Type: 'AWS::ElasticLoadBalancingV2::ListenerRule'	
     Condition: HasDomainName	
@@ -3827,6 +3918,7 @@ Resources:
               - /sonarqube/*	
       ListenerArn: !Ref HTTPSListener	
       Priority: 2	
+
   HTTPSListener:	
     Type: 'AWS::ElasticLoadBalancingV2::Listener'	
     Condition: HasDomainName	
@@ -3839,6 +3931,7 @@ Resources:
       LoadBalancerArn: !Ref JenkinsLoadBalancer	
       Port: 443	
       # Protocol: HTTPS	
+
   BastionSecurityGroup:	
     Type: "AWS::EC2::SecurityGroup"	
     Properties:	
@@ -3847,6 +3940,7 @@ Resources:
           Value: !Sub '${EnvironmentPrefix}-Bastion-SG'	
       GroupDescription: Security group for bastion node	
       VpcId: !Ref VPC	
+
   BastionSecurityGroupIngress:	
     Type: "AWS::EC2::SecurityGroupIngress"	
     DependsOn: BastionSecurityGroup	
@@ -3856,6 +3950,7 @@ Resources:
       FromPort: 22	
       ToPort: 22	
       CidrIp: '0.0.0.0/0'	
+
   BastionNodeLaunchConfig:	
     Type: "AWS::AutoScaling::LaunchConfiguration"	
     Properties:	
@@ -3872,6 +3967,7 @@ Resources:
       KeyName: !Ref KeyName	
       SecurityGroups:	
         - Ref: BastionSecurityGroup	
+
   BastionNodeGroup:	
     Type: "AWS::AutoScaling::AutoScalingGroup"	
     Properties:	
@@ -3892,6 +3988,7 @@ Resources:
         MaxBatchSize: "1"	
         MinInstancesInService: !Ref BastionNodeAutoScalingGroupDesiredCapacity	
         PauseTime: PT5M	
+
   CICDWebACL:	
     Type: AWS::WAFv2::WebACL	
     Properties:	
@@ -3998,12 +4095,13 @@ Resources:
               TextTransformations:	
                 - Priority: 1	
                   Type: NONE	
-  	
+
   CICDWebACLAssociation:	
     Type: 'AWS::WAFv2::WebACLAssociation'	
     Properties:	
       WebACLArn: !GetAtt CICDWebACL.Arn	
       ResourceArn: !Ref JenkinsLoadBalancer	
+
   KMSKey:	
     Type: AWS::KMS::Key	
     Properties:	
@@ -4019,12 +4117,13 @@ Resources:
           Action:	
           - kms:*	
           Resource: "*"	
+
   BackupVaultWithDailyBackups:	
     Type: "AWS::Backup::BackupVault"	
     Properties:	
       BackupVaultName: "BackupVaultWithDailyBackups"	
       EncryptionKeyArn: !GetAtt KMSKey.Arn	
-  	
+
   BackupPlanWithDailyBackups:	
     Type: "AWS::Backup::BackupPlan"	
     Properties:	
@@ -4036,7 +4135,7 @@ Resources:
             TargetBackupVault: !Ref BackupVaultWithDailyBackups	
             ScheduleExpression: "cron(0 5 ? * * *)"	
     DependsOn: BackupVaultWithDailyBackups	
-  	
+
   BackupRole:	
     Type: "AWS::IAM::Role"	
     Properties:	
@@ -4052,7 +4151,7 @@ Resources:
             - "sts:AssumeRole"	
      ManagedPolicyArns:	
        - "arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForBackup"	
-  	
+
   TagBasedBackupSelection:	
     Type: "AWS::Backup::BackupSelection"	
     Properties:	
@@ -4066,12 +4165,12 @@ Resources:
            ConditionValue: "daily"	
       BackupPlanId: !Ref BackupPlanWithDailyBackups	
     DependsOn: BackupPlanWithDailyBackups	
-  	
+
   CodeArtifactDomainResource:	
     Type: 'AWS::CodeArtifact::Domain'	
     Properties:	
       DomainName: !Ref CodeArtifactDomain	
-  	
+
   CodeArtifactRepository:	
     Type: 'AWS::CodeArtifact::Repository'	
     Properties:	
@@ -4079,7 +4178,7 @@ Resources:
       DomainName: !GetAtt CodeArtifactDomainResource.Name	
       ExternalConnections:	
         - public:maven-central	
-  	
+
   CodeArtifactPolicy:	
     Type: AWS::IAM::ManagedPolicy	
     Properties:	
@@ -4093,6 +4192,7 @@ Resources:
           Action:	
           - codeartifact:*	
           Resource: !Ref CodeArtifactRepository	
+
 Outputs:	
   SubnetIds:	
     Description: All subnets in the VPC	
@@ -4104,6 +4204,7 @@ Outputs:
     Export:	
       Name:	
         Fn::Sub: "${AWS::StackName}-SubnetIds"	
+
   SecurityGroups:	
     Description: >-	
       Security group for the cluster control plane communication with worker	
@@ -4114,12 +4215,14 @@ Outputs:
     Export:	
       Name:	
         Fn::Sub: "${AWS::StackName}-SecurityGroups"	
+
   VpcId:	
     Description: The VPC Id	
     Value: !Ref VPC	
     Export:	
       Name:	
-        Fn::Sub: "${AWS::StackName}-VpcId"	
+        Fn::Sub: "${AWS::StackName}-VpcId"
+
   AllSubnetIds:	
     Description: All subnets in the VPC	
     Value: !Join	
@@ -4133,12 +4236,15 @@ Outputs:
     Export:	
       Name:	
         Fn::Sub: "${AWS::StackName}-AllSubnetIds"	
+
   NodeInstanceRole:	
     Description: The node instance role	
     Value: !GetAtt NodeInstanceRole.Arn	
+
   NodeSecurityGroup:	
     Description: The security group for the node group	
     Value: !Ref NodeSecurityGroup	
+
   NodeGroup:	
     Description: The NodeGroup for the node group	
     Value: !Ref NodeGroup	
