@@ -3565,16 +3565,20 @@ Resources:
               mode: '000755'	
               owner: ec2-user	
               group: ec2-user	
-          commands:	
-            01_mount:	
-              command: !Sub >	
-                mount -t nfs4 -o nfsvers=4.1 ${FileSystem}.efs.${AWS::Region}.amazonaws.com:/ /${MountPoint}	
-            02_install_jenkins:	
-              command: "/home/ec2-user/install-jenkins"	
-            03_permissions:	
-              command: !Sub "chown jenkins:jenkins -R /${MountPoint}"	
-            04_jenkins_restart:	
-              command: "systemctl restart jenkins"	
+          commands:
+            01_mount:
+              command: !Sub >
+                mount -t nfs4 -o nfsvers=4.1 ${FileSystem}.efs.${AWS::Region}.amazonaws.com:/ /${MountPoint}
+            02_permissions:
+              command: !Sub "chown jenkins:jenkins -R /${MountPoint}"
+            03_jenkins_restart:
+              command: "systemctl restart jenkins"
+            04_install_jenkins:
+              command: "/home/ec2-user/install-jenkins"
+            05_permissions:
+              command: !Sub "chown jenkins:jenkins -R /${MountPoint}"
+            06_jenkins_restart:
+              command: "systemctl restart jenkins"
     Properties:	
       AssociatePublicIpAddress: "false"	
       BlockDeviceMappings:	
