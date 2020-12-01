@@ -3544,7 +3544,7 @@ Resources:
               content: !Sub |	
                 #!/bin/bash	
                 # Install Plugins	
-                while [ ! -f /${MountPoint}/plugins ]	
+                while [ ! -d /${MountPoint}/plugins ]	
                 do	
                   sleep 60	
                 done	
