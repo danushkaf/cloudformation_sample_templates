@@ -3509,7 +3509,7 @@ Resources:
                         region: "${AWS::Region}"
                         templates:
                           - description: "Auto configured EC2 Agent"
-                            type: "${SlaveInstanceType}"
+                            type: "SLAVE_INSTANCE_TYPE"
                             labelString: "JenkinsSlaves"
                             <<: *ec2_anchor
                 tool:
@@ -3564,6 +3564,9 @@ Resources:
                   sleep 30s
                 done
                 if [ ! -f /${MountPoint}/jenkins.yaml ]; then
+                  nodetype=$(echo ${SlaveInstanceType} | sed -e "s/\b\(.\)/\u\1/g")
+                  nodetype=$(echo $nodetype | sed -e "s/\.//g")
+                  sed -i -e "s|SLAVE_INSTANCE_TYPE|$nodetype|g" /home/ec2-user/jenkins.yaml
                   read -r super_password < /${MountPoint}/secrets/initialAdminPassword
                   sed -i -e "s|INITIAL_PASSWORD|$super_password|g" /home/ec2-user/jenkins.yaml
                   mv /${MountPoint}/secrets/initialAdminPassword /${MountPoint}/secrets/initialAdminPassword.back
