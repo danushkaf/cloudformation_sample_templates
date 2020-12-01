@@ -2175,7 +2175,7 @@ Resources:
                 - wget https://get.helm.sh/helm-v3.4.1-linux-amd64.tar.gz	
                 - tar -zxvf helm-v3.4.1-linux-amd64.tar.gz	
                 - chmod +x linux-amd64/helm	
-                - mv linux-amd64/helm /usr/local/bin/helm	
+                - mv linux-amd64/helm /usr/bin/helm	
                 - rm -rf linux-amd64	
                 - rm helm-v3.4.1-linux-amd64.tar.gz	
                 - wget -O /etc/yum.repos.d/jenkins.repo https://pkg.jenkins.io/redhat-stable/jenkins.repo	
@@ -2655,7 +2655,7 @@ Resources:
                 - wget https://get.helm.sh/helm-v3.4.1-linux-amd64.tar.gz	
                 - tar -zxvf helm-v3.4.1-linux-amd64.tar.gz	
                 - chmod +x linux-amd64/helm	
-                - mv linux-amd64/helm /usr/local/bin/helm	
+                - mv linux-amd64/helm /usr/bin/helm	
                 - rm -rf linux-amd64	
                 - rm helm-v3.4.1-linux-amd64.tar.gz	
         - name: installInspectorAgent	
