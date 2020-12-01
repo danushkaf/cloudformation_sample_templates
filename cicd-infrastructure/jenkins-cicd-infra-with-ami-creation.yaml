@@ -3035,540 +3035,544 @@ Resources:
         outputs:	
         - createEncryptedCopy.ImageId	
 
-  WaitHandle:	
-    Type: AWS::CloudFormation::WaitConditionHandle	
+  NodeLaunchConfig:
+    Type: "AWS::AutoScaling::LaunchConfiguration"
+    DependsOn:
+      - FileSystem
+      - MountTargetA
+      - MountTargetB
+      - MountTargetC
+      - JenkinsLoadBalancer
+      - CreateJenkinsImage
+      - CreateJenkinsSlaveImage
+    Metadata:
+      AWS::CloudFormation::Init:
+        configSets:
+          MountConfig:
+          - prereq
+          - mountandinstall
+        prereq:
+          packages:
+            yum:
+              nfs-utils: []
+          files:
+            "/home/ec2-user/post_nfsstat":
+              content: !Sub |
+                #!/bin/bash
 
-  WaitCondition:	
-    DependsOn:	
-      - NodeLaunchConfig	
-    Type: AWS::CloudFormation::WaitCondition	
-    Properties:	
-      Handle: !Ref WaitHandle	
-      Timeout: '7200'	
-      Count: 2	
+                INPUT="$(cat)"
+                CW_JSON_OPEN='{ "Namespace": "EFS", "MetricData": [ '
+                CW_JSON_CLOSE=' ] }'
+                CW_JSON_METRIC=''
+                METRIC_COUNTER=0
 
-  NodeLaunchConfig:	
-    Type: "AWS::AutoScaling::LaunchConfiguration"	
-    DependsOn:	
-      - FileSystem	
-      - MountTargetA	
-      - MountTargetB	
-      - MountTargetC	
-      - JenkinsLoadBalancer	
-      - CreateJenkinsImage	
-      - CreateJenkinsSlaveImage	
-    Metadata:	
-      AWS::CloudFormation::Init:	
-        configSets:	
-          MountConfig:	
-          - prereq	
-          - mountandinstall	
-        prereq:	
-          packages:	
-            yum:	
-              nfs-utils: []	
-          files:	
-            "/home/ec2-user/post_nfsstat":	
-              content: !Sub |	
-                #!/bin/bash	
-                INPUT="$(cat)"	
-                CW_JSON_OPEN='{ "Namespace": "EFS", "MetricData": [ '	
-                CW_JSON_CLOSE=' ] }'	
-                CW_JSON_METRIC=''	
-                METRIC_COUNTER=0	
-                for COL in 1 2 3 4 5 6; do	
-                 COUNTER=0	
-                 METRIC_FIELD=$COL	
-                 DATA_FIELD=$(($COL+($COL-1)))	
-                 while read line; do	
-                   if [[ COUNTER -gt 0 ]]; then	
-                     LINE=`echo $line | tr -s ' ' `	
-                     AWS_COMMAND="aws cloudwatch put-metric-data --region ${AWS::Region}"	
-                     MOD=$(( $COUNTER % 2))	
-                     if [ $MOD -eq 1 ]; then	
-                       METRIC_NAME=`echo $LINE | cut -d ' ' -f $METRIC_FIELD`	
-                     else	
-                       METRIC_VALUE=`echo $LINE | cut -d ' ' -f $DATA_FIELD`	
-                     fi	
-                     if [[ -n "$METRIC_NAME" && -n "$METRIC_VALUE" ]]; then	
-                       INSTANCE_ID=$(curl -s http://169.254.169.254/latest/meta-data/instance-id)	
-                       CW_JSON_METRIC="$CW_JSON_METRIC { \"MetricName\": \"$METRIC_NAME\", \"Dimensions\": [{\"Name\": \"InstanceId\", \"Value\": \"$INSTANCE_ID\"} ], \"Value\": $METRIC_VALUE },"	
-                       unset METRIC_NAME	
-                       unset METRIC_VALUE	
-                       METRIC_COUNTER=$((METRIC_COUNTER+1))	
-                       if [ $METRIC_COUNTER -eq 20 ]; then	
-                         # 20 is max metric collection size, so we have to submit here	
-                         aws cloudwatch put-metric-data --region ${AWS::Region} --cli-input-json "`echo $CW_JSON_OPEN ${!CW_JSON_METRIC%?} $CW_JSON_CLOSE`"	
-                         # reset	
-                         METRIC_COUNTER=0	
-                         CW_JSON_METRIC=''	
-                       fi	
-                     fi	
-                     COUNTER=$((COUNTER+1))	
-                   fi	
-                   if [[ "$line" == "Client nfs v4:" ]]; then	
-                     # the next line is the good stuff	
-                     COUNTER=$((COUNTER+1))	
-                   fi	
-                 done <<< "$INPUT"	
-                done	
-                # submit whatever is left	
-                aws cloudwatch put-metric-data --region ${AWS::Region} --cli-input-json "`echo $CW_JSON_OPEN ${!CW_JSON_METRIC%?} $CW_JSON_CLOSE`"	
-              mode: '000755'	
-              owner: ec2-user	
-              group: ec2-user	
-            "/home/ec2-user/fstab_update":	
-              content: !Sub |	
-                #!/bin/bash	
-                fstab=/etc/fstab	
-                jenkinsEntry="${FileSystem}.efs.${AWS::Region}.amazonaws.com:/ /${MountPoint} nfs rw,hard,intr 0 0"	
-                if [[ $(grep -q "${FileSystem}" "$fstab") ]]	
-                then	
-                    echo "Entry in fstab does not exists."	
-                else	
-                    echo "Entry in fstab exists."	
-                    sed -i "\@$jenkinsEntry@d" /etc/fstab	
-                fi	
-                echo "$jenkinsEntry" >> /etc/fstab	
-              mode: '000755'	
-              owner: ec2-user	
-              group: ec2-user	
-            "/home/ec2-user/crontab":	
-              content: "* * * * * /usr/sbin/nfsstat | /home/ec2-user/post_nfsstat\n"	
-              owner: ec2-user	
-              group: ec2-user	
-          commands:	
-            01_createdir:	
-              command: !Sub "mkdir -p /${MountPoint}"	
-            02_update_fstab:	
-              command: "/home/ec2-user/fstab_update"	
-        mountandinstall:	
-          files:	
-            "/home/ec2-user/org.jenkinsci.plugins.workflow.libs.GlobalLibraries.xml":	
-              content: !Sub |	
-                <?xml version='1.1' encoding='UTF-8'?>	
-                <org.jenkinsci.plugins.workflow.libs.GlobalLibraries plugin="workflow-cps-global-lib">	
-                  <libraries>	
-                    <org.jenkinsci.plugins.workflow.libs.LibraryConfiguration>	
-                      <name>global_pipeline_lib</name>	
-                      <retriever class="org.jenkinsci.plugins.workflow.libs.SCMSourceRetriever">	
-                        <scm class="jenkins.plugins.git.GitSCMSource" plugin="git">	
-                          <remote>${DevopsRepoGitUrl}</remote>	
-                          <credentialsId>git_credential</credentialsId>	
-                          <traits>	
-                            <jenkins.plugins.git.traits.BranchDiscoveryTrait/>	
-                            <jenkins.scm.impl.trait.WildcardSCMHeadFilterTrait plugin="scm-api">	
-                              <includes>master</includes>	
-                              <excludes></excludes>	
-                            </jenkins.scm.impl.trait.WildcardSCMHeadFilterTrait>	
-                          </traits>	
-                        </scm>	
-                      </retriever>	
-                      <defaultVersion>master</defaultVersion>	
-                      <implicit>false</implicit>	
-                      <allowVersionOverride>false</allowVersionOverride>	
-                      <includeInChangesets>false</includeInChangesets>	
-                    </org.jenkinsci.plugins.workflow.libs.LibraryConfiguration>	
-                  </libraries>	
-                </org.jenkinsci.plugins.workflow.libs.GlobalLibraries>	
-              mode: '000755'	
-              owner: ec2-user	
-              group: ec2-user	
-            "/home/ec2-user/plugins.txt":	
-              content: |	
-               ant	
-               apache-httpcomponents-client-4-api	
-               authorize-project	
-               bootstrap4-api	
-               bouncycastle-api	
-               branch-api	
-               build-timeout	
-               checks-api	
-               aws-credentials	
-               command-launcher	
-               credentials	
-               configuration-as-code	
-               credentials-binding	
-               dashboard-view	
-               display-url-api	
-               durable-task	
-               ec2	
-               echarts-api	
-               email-ext	
-               emailext-template	
-               envinject-api	
-               environment-dashboard	
-               envinject	
-               cloudbees-folder	
-               font-awesome-api	
-               git-client	
-               git	
-               git-server	
-               github-api	
-               github-branch-source	
-               github	
-               gradle	
-               jackson2-api	
-               ace-editor	
-               handlebars	
-               jquery-detached	
-               momentjs	
-               jaxb	
-               jquery	
-               jquery3-api	
-               jsch	
-               junit	
-               ldap	
-               lockable-resources	
-               mailer	
-               matrix-auth	
-               matrix-project	
-               monitoring	
-               node-iterator-api	
-               okhttp-api	
-               jdk-tool	
-               antisamy-markup-formatter	
-               pam-auth	
-               workflow-aggregator	
-               pipeline-graph-analysis	
-               pipeline-utility-steps	
-               workflow-api	
-               workflow-basic-steps	
-               pipeline-build-step	
-               pipeline-model-definition	
-               pipeline-model-extensions	
-               pipeline-github-lib	
-               workflow-cps	
-               pipeline-input-step	
-               workflow-job	
-               pipeline-milestone-step	
-               pipeline-model-api	
-               workflow-multibranch	
-               workflow-durable-task-step	
-               pipeline-rest-api	
-               workflow-scm-step	
-               workflow-cps-global-lib	
-               pipeline-stage-step	
-               pipeline-stage-tags-metadata	
-               pipeline-stage-view	
-               workflow-step-api	
-               workflow-support	
-               plain-credentials	
-               plugin-util-api	
-               popper-api	
-               resource-disposer	
-               scm-api	
-               script-security	
-               simple-theme-plugin	
-               snakeyaml-api	
-               sonar	
-               ssh-slaves	
-               ssh-credentials	
-               structs	
-               timestamper	
-               token-macro	
-               trilead-api	
-               variant	
-               ws-cleanup	
-              mode: '000755'	
-              owner: ec2-user	
-              group: ec2-user	
-            "/home/ec2-user/batch-install-jenkins-plugins.sh":	
-              content: |	
-                #!/bin/bash	
-                #	
-                readonly PROGNAME=$(basename $0)	
-                readonly PROGDIR=$(readlink -m $(dirname $0))	
-                readonly ARGS="$@"	
-                #	
-                # Get up to date JSON file of stable plugins	
-                #	
-                get_update_center() {	
-                  echo "Fetching JSON from update center"	
-                # fetch up to date update center	
-                  $CURL_CMD http://updates.jenkins-ci.org/stable/update-center.json -o $PLUGIN_TEMPDIR/update-center.json	
-                # cleanup json	
-                  sed -i 's|updateCenter.post(||g' $PLUGIN_TEMPDIR/update-center.json	
-                  sed -i 's|);||g' $PLUGIN_TEMPDIR/update-center.json	
-                }	
-                #	
-                # Fetch and install plugin	
-                #	
-                fetch_plugin()	
-                {	
-                  local DEP_LOOP	
-                  local DEPENDENCIES	
-                  local DEPENDENCY	
-                  local URL	
-                  local VERSION	
-                  local SFILENAME	
-                  local FFILENAME	
-                  local PPLUGIN	
-                  local OPTIONALP	
-                  local FPLUGIN=$1	
-                  if [ ! -z "$EXCLUDED_PLUGINS" ]; then	
-                  for PPLUGIN in $EXCLUDED_PLUGINS	
-                  do	
-                    if [ "$FPLUGIN" = "$PPLUGIN" ]; then	
-                    echo "$FPLUGIN is already provided, exiting"	
-                    return	
-                    fi	
-                  done	
-                  fi	
-                  URL=`cat $PLUGIN_TEMPDIR/update-center.json | python -c "import sys, json; print json.load(sys.stdin)[\"plugins\"][\"$FPLUGIN\"][\"url\"]"`	
-                  VERSION=`cat $PLUGIN_TEMPDIR/update-center.json | python -c "import sys, json; print json.load(sys.stdin)[\"plugins\"][\"$FPLUGIN\"][\"version\"]"`	
-                  SFILENAME=`basename $URL | sed -e "s|.hpi|.jpi|g"`	
-                  FFILENAME=`basename $URL | sed -e "s|.hpi|-$VERSION.jpi|g"`	
-                  INCLUDEDPLUGINS="$INCLUDEDPLUGINS$FPLUGIN:$VERSION\n"	
-                  if [ ! -f $PLUGIN_TEMPDIR/$FFILENAME ]; then	
-                    echo "Downloading $FPLUGIN"	
-                    $CURL_CMD $URL -o $PLUGIN_TEMPDIR/$FFILENAME	
-                  fi	
-                  cp $PLUGIN_TEMPDIR/$FFILENAME $PLUGINS_DIR/$SFILENAME	
-                  DEPENDENCIES=`cat $PLUGIN_TEMPDIR/update-center.json | python -c "import sys, json; print json.load(sys.stdin)[\"plugins\"][\"$FPLUGIN\"][\"dependencies\"]"`	
-                  if [ "$DEPENDENCIES" != "[]" ]; then	
-                  for DEP_LOOP in 0 1 2 3 4 5 6 7 8 9 10; do	
-                    DEPENDENCY=`cat $PLUGIN_TEMPDIR/update-center.json | python -c "import sys, json; print json.load(sys.stdin)[\"plugins\"][\"$FPLUGIN\"][\"dependencies\"][$DEP_LOOP][\"name\"]" 2>/dev/null || true`	
-                    # No more dependency, exit loop	
-                    if [ "$DEPENDENCY" = "" ]; then	
-                      break;	
-                    fi	
-                    OPTIONALP=`cat $PLUGIN_TEMPDIR/update-center.json | python -c "import sys, json; print json.load(sys.stdin)[\"plugins\"][\"$FPLUGIN\"][\"dependencies\"][$DEP_LOOP][\"optional\"]" 2>/dev/null|| true`	
-                    # Don't fetch optional dependencies	
-                    if [ "$OPTIONALP" = "True" ]; then	
-                      echo "$DEPENDENCY plugin is optional, it won't be included"	
-                      continue;	
-                    fi	
-                    fetch_plugin $DEPENDENCY	
-                  done	
-                  fi	
-                }	
-                usage() {	
-                  cat <<- EOF	
-                  usage: $PROGNAME options	
-                  Install or update Jenkins Plugins.	
-                  OPTIONS:	
-                     -p --plugins  file containing plugins list	
-                     -x --xplugins   file containing excluded plugins list	
-                     -d --plugindir  directory where to deploy plugins (.jpi)	
-                  Examples:	
-                     Run:	
-                     $PROGNAME --plugins okplugins --excludedplugins nokplugins --plugindir /var/lib/myjenkins/plugins	
-                EOF	
-                  exit 1	
-                }	
-                #	
-                # Parse command line	
-                #	
-                cmdline() {	
-                  # got this idea from here:	
-                  # http://kirk.webfinish.com/2009/10/bash-shell-script-to-use-getopts-with-gnu-style-long-positional-parameters/	
-                  local arg=	
-                  for arg	
-                  do	
-                    local delim=""	
-                    case "$arg" in	
-                      #translate --gnu-long-options to -g (short options)	
-                      --plugins)     args="${args}-p ";;	
-                      --xplugins)    args="${args}-e ";;	
-                      --plugindir)     args="${args}-d ";;	
-                      --help)      args="${args}-h ";;	
-                      --verbose)     args="${args}-v ";;	
-                      --debug)       args="${args}-x ";;	
-                      #pass through anything else	
-                      *) [[ "${arg:0:1}" == "-" ]] || delim="\""	
-                        args="${args}${delim}${arg}${delim} ";;	
-                    esac	
-                  done	
-                  #Reset the positional parameters to the short options	
-                  eval set -- $args	
-                  while getopts "hvxp:e:d:" OPTION	
-                  do	
-                     case $OPTION in	
-                     v)	
-                       readonly VERBOSE=1	
-                       ;;	
-                     x)	
-                       readonly DEBUG='-x'	
-                       set -x	
-                       ;;	
-                     h)	
-                       usage	
-                       exit 0	
-                       ;;	
-                     p)	
-                       readonly PLUGINS_FILE=$OPTARG	
-                       ;;	
-                     e)	
-                       readonly EXCLUDED_PLUGINS_FILE=$OPTARG	
-                       ;;	
-                     d)	
-                       readonly PLUGINS_DIR=$OPTARG	
-                       ;;	
-                    esac	
-                  done	
-                  if [ -z "$PLUGINS_FILE" ]; then	
-                    echo "You must provide plugin file"	
-                    usage	
-                  fi	
-                  if [ -z "$PLUGINS_DIR" ]; then	
-                    echo "You must provide plugin directory"	
-                    usage	
-                  fi	
-                  readonly PLUGINS=`cat $PLUGINS_FILE`	
-                  if [ ! -z "$EXCLUDED_PLUGINS_FILE" ]; then	
-                    readonly EXCLUDED_PLUGINS=`cat $EXCLUDED_PLUGINS_FILE`	
-                  fi	
-                  if [ "$VERBOSE" = "1" ]; then	
-                    CURL_CMD="curl -L"	
-                  else	
-                    CURL_CMD="curl -L --silent"	
-                  fi	
-                  if [ "$DEBUG" = "-x" ]; then	
-                    CURL_CMD="$CURL_CMD -v"	
-                  fi	
-                }	
-                main() {	
-                  cmdline $ARGS	
-                  readonly PLUGIN_TEMPDIR=`mktemp -d /tmp/batchjpi.XXXXXXX`	
-                  get_update_center	
-                  for PLUGIN in $PLUGINS	
-                  do	
-                    echo "Fetching plugin $PLUGIN and dependencies"	
-                    fetch_plugin $PLUGIN	
-                  done	
-                  rm -rf $PLUGIN_TEMPDIR	
-                }	
-                main	
-              mode: '000755'	
-              owner: ec2-user	
-              group: ec2-user	
-            "/home/ec2-user/jenkins.yaml":	
-              content: !Sub |	
-                x-ec2_anchor: &ec2_anchor	
-                  associatePublicIp: false	
-                  connectBySSHProcess: false	
-                  connectionStrategy: PRIVATE_IP	
-                  deleteRootOnTermination: true	
-                  ebsOptimized: true	
-                  subnetId: "${Subnet04} ${Subnet05} ${Subnet06}"	
-                  iamInstanceProfile: "${NodeInstanceProfile.Arn}"	
-                  idleTerminationMinutes: ${SlaveIdleTimeOut}	
-                  maxTotalUses: -1	
-                  monitoring: false	
-                  numExecutors: ${SlaveNoOfExecuters}	
-                  stopOnTerminate: false	
-                  useDedicatedTenancy: false	
-                  useEphemeralDevices: false	
-                  ami: "${CreateJenkinsSlaveImage}"	
-                  securityGroups: "${NodeSecurityGroup}"	
-                  remoteFS: "/home/ec2-user"	
-                  remoteAdmin: "ec2-user"	
-                  mode: "NORMAL"	
-                  minimumNumberOfInstances: ${SlaveMinInstances}	
-                  minimumNumberOfSpareInstances: ${SlaveSpareInstances}	
-                  hostKeyVerificationStrategy: ACCEPT_NEW	
-                  amiType:	
-                    unixData:	
-                      sshPort: "22"	
-                  tags:	
-                    - name: Name	
-                      value: Jenkins-Slave	
-                jenkins:	
-                  systemMessage: "Jenkins configured automatically by Jenkins Configuration as Code plugin\n\n"	
-                  numExecutors: ${JenkinsNoOfExecuters}	
-                  crumbIssuer:	
-                    standard:	
-                      excludeClientIPFromCrumb: false	
-                  globalNodeProperties:	
-                    - envVars:	
-                        env:	
-                        - key: GitcredentialsId	
-                          value: git_credential	
-                  securityRealm:	
-                    local:	
-                      allowsSignup: false	
-                      users:	
-                        - id: "admin"	
-                          password: "INITIAL_PASSWORD"	
-                  authorizationStrategy:	
-                    projectMatrix:	
-                      permissions:	
-                        - "Overall/Administer:admin"	
-                  clouds:	
-                    - amazonEC2:	
-                        cloudName: "ec2"	
-                        instanceCapStr: ${SlaveMaxInstances}	
-                        useInstanceProfileForCredentials: true	
-                        sshKeysCredentialsId: "slave_ssh_key"	
-                        noDelayProvisioning: true	
-                        region: "${AWS::Region}"	
-                        templates:	
-                          - description: "Auto configured EC2 Agent"	
-                            type: "${SlaveInstanceType}"	
-                            labelString: "JenkinsSlaves"	
-                            <<: *ec2_anchor	
-                tool:	
-                  jdk:	
-                    installations:	
-                      - name: jdk11	
-                        home: JDK_HOME	
-                credentials:	
-                  system:	
-                    domainCredentials:	
-                      - credentials:	
-                          - basicSSHUserPrivateKey:	
-                              scope: GLOBAL	
-                              id: slave_ssh_key	
-                              username: ec2-user	
-                              description: "Slave SSH Key"	
-                              privateKeySource:	
-                                directEntry:	
-                                  privateKey: ${EC2SlaveKey}	
-                          - usernamePassword:	
-                              scope: GLOBAL	
-                              id: "git_credential"	
-                              username: "${GitUsername}"	
-                              password: "${GitPassword}"	
-                              description: "Git Credentials"	
-                unclassified:	
-                  sonarglobalconfiguration:	
-                    buildWrapperEnabled: false	
-                    installations:	
-                      - name: "SonarQubeServer"	
-                        serverUrl: "http://${JenkinsLoadBalancer.DNSName}/sonarqube"	
-              mode: '000755'	
-              owner: ec2-user	
-              group: ec2-user	
-            "/home/ec2-user/install-jenkins":	
-              content: !Sub |	
-                #!/bin/bash	
-                # Install Plugins	
-                while [ ! -d /${MountPoint}/plugins ]	
-                do	
-                  sleep 60	
-                done	
-                if [ ! -f /${MountPoint}/jenkins-plugins-installed ]; then	
-                  ./home/ec2-user/batch-install-jenkins-plugins.sh --plugins /home/ec2-user/plugins.txt --plugindir /${MountPoint}/plugins	
-                  touch /${MountPoint}/jenkins-plugins-installed	
-                  chmod 755 /${MountPoint}/jenkins-plugins-installed	
-                fi	
-                jdk_home=$(find /usr/lib/jvm -name java-11* -type d)	
-                sed -i -e "s|JDK_HOME|$jdk_home|g" /home/ec2-user/jenkins.yaml	
-                while [ ! -f /${MountPoint}/secrets/initialAdminPassword ]	
-                do	
-                  sleep 30s	
-                done	
-                if [ ! -f /${MountPoint}/jenkins.yaml ]; then	
-                  read -r super_password < /${MountPoint}/secrets/initialAdminPassword	
-                  sed -i -e "s|INITIAL_PASSWORD|$super_password|g" /home/ec2-user/jenkins.yaml	
-                  mv /${MountPoint}/secrets/initialAdminPassword /${MountPoint}/secrets/initialAdminPassword.back	
-                  cp /home/ec2-user/jenkins.yaml /${MountPoint}/jenkins.yaml	
-                fi	
-                cp /home/ec2-user/org.jenkinsci.plugins.workflow.libs.GlobalLibraries.xml /${MountPoint}/	
-              mode: '000755'	
-              owner: ec2-user	
-              group: ec2-user	
+                for COL in 1 2 3 4 5 6; do
+
+                 COUNTER=0
+                 METRIC_FIELD=$COL
+                 DATA_FIELD=$(($COL+($COL-1)))
+
+                 while read line; do
+                   if [[ COUNTER -gt 0 ]]; then
+
+                     LINE=`echo $line | tr -s ' ' `
+                     AWS_COMMAND="aws cloudwatch put-metric-data --region ${AWS::Region}"
+                     MOD=$(( $COUNTER % 2))
+
+                     if [ $MOD -eq 1 ]; then
+                       METRIC_NAME=`echo $LINE | cut -d ' ' -f $METRIC_FIELD`
+                     else
+                       METRIC_VALUE=`echo $LINE | cut -d ' ' -f $DATA_FIELD`
+                     fi
+
+                     if [[ -n "$METRIC_NAME" && -n "$METRIC_VALUE" ]]; then
+                       INSTANCE_ID=$(curl -s http://169.254.169.254/latest/meta-data/instance-id)
+                       CW_JSON_METRIC="$CW_JSON_METRIC { \"MetricName\": \"$METRIC_NAME\", \"Dimensions\": [{\"Name\": \"InstanceId\", \"Value\": \"$INSTANCE_ID\"} ], \"Value\": $METRIC_VALUE },"
+                       unset METRIC_NAME
+                       unset METRIC_VALUE
+
+                       METRIC_COUNTER=$((METRIC_COUNTER+1))
+                       if [ $METRIC_COUNTER -eq 20 ]; then
+                         # 20 is max metric collection size, so we have to submit here
+                         aws cloudwatch put-metric-data --region ${AWS::Region} --cli-input-json "`echo $CW_JSON_OPEN ${!CW_JSON_METRIC%?} $CW_JSON_CLOSE`"
+
+                         # reset
+                         METRIC_COUNTER=0
+                         CW_JSON_METRIC=''
+                       fi
+                     fi
+                     COUNTER=$((COUNTER+1))
+                   fi
+
+                   if [[ "$line" == "Client nfs v4:" ]]; then
+                     # the next line is the good stuff
+                     COUNTER=$((COUNTER+1))
+                   fi
+                 done <<< "$INPUT"
+                done
+
+                # submit whatever is left
+                aws cloudwatch put-metric-data --region ${AWS::Region} --cli-input-json "`echo $CW_JSON_OPEN ${!CW_JSON_METRIC%?} $CW_JSON_CLOSE`"
+              mode: '000755'
+              owner: ec2-user
+              group: ec2-user
+            "/home/ec2-user/fstab_update":
+              content: !Sub |
+                #!/bin/bash
+                fstab=/etc/fstab
+                jenkinsEntry="${FileSystem}.efs.${AWS::Region}.amazonaws.com:/ /${MountPoint} nfs rw,hard,intr 0 0"
+                if [[ $(grep -q "${FileSystem}" "$fstab") ]]
+                then
+                    echo "Entry in fstab does not exists."
+                else
+                    echo "Entry in fstab exists."
+                    sed -i "\@$jenkinsEntry@d" /etc/fstab
+                fi
+                echo "$jenkinsEntry" >> /etc/fstab
+              mode: '000755'
+              owner: ec2-user
+              group: ec2-user
+            "/home/ec2-user/crontab":
+              content: "* * * * * /usr/sbin/nfsstat | /home/ec2-user/post_nfsstat\n"
+              owner: ec2-user
+              group: ec2-user
+          commands:
+            01_createdir:
+              command: !Sub "mkdir -p /${MountPoint}"
+            02_update_fstab:
+              command: "/home/ec2-user/fstab_update"
+        mountandinstall:
+          files:
+            "/home/ec2-user/org.jenkinsci.plugins.workflow.libs.GlobalLibraries.xml":
+              content: !Sub |
+                <?xml version='1.1' encoding='UTF-8'?>
+                <org.jenkinsci.plugins.workflow.libs.GlobalLibraries plugin="workflow-cps-global-lib">
+                  <libraries>
+                    <org.jenkinsci.plugins.workflow.libs.LibraryConfiguration>
+                      <name>global_pipeline_lib</name>
+                      <retriever class="org.jenkinsci.plugins.workflow.libs.SCMSourceRetriever">
+                        <scm class="jenkins.plugins.git.GitSCMSource" plugin="git">
+                          <remote>${DevopsRepoGitUrl}</remote>
+                          <credentialsId>git_credential</credentialsId>
+                          <traits>
+                            <jenkins.plugins.git.traits.BranchDiscoveryTrait/>
+                            <jenkins.scm.impl.trait.WildcardSCMHeadFilterTrait plugin="scm-api">
+                              <includes>master</includes>
+                              <excludes></excludes>
+                            </jenkins.scm.impl.trait.WildcardSCMHeadFilterTrait>
+                          </traits>
+                        </scm>
+                      </retriever>
+                      <defaultVersion>master</defaultVersion>
+                      <implicit>false</implicit>
+                      <allowVersionOverride>false</allowVersionOverride>
+                      <includeInChangesets>false</includeInChangesets>
+                    </org.jenkinsci.plugins.workflow.libs.LibraryConfiguration>
+                  </libraries>
+                </org.jenkinsci.plugins.workflow.libs.GlobalLibraries>
+              mode: '000755'
+              owner: ec2-user
+              group: ec2-user
+            "/home/ec2-user/plugins.txt":
+              content: |
+               ant
+               apache-httpcomponents-client-4-api
+               authorize-project
+               bootstrap4-api
+               bouncycastle-api
+               branch-api
+               build-timeout
+               checks-api
+               aws-credentials
+               command-launcher
+               credentials
+               configuration-as-code
+               credentials-binding
+               dashboard-view
+               display-url-api
+               durable-task
+               ec2
+               echarts-api
+               email-ext
+               emailext-template
+               envinject-api
+               environment-dashboard
+               envinject
+               cloudbees-folder
+               font-awesome-api
+               git-client
+               git
+               git-server
+               github-api
+               github-branch-source
+               github
+               gradle
+               jackson2-api
+               ace-editor
+               handlebars
+               jquery-detached
+               momentjs
+               jaxb
+               jquery
+               jquery3-api
+               jsch
+               junit
+               ldap
+               lockable-resources
+               mailer
+               matrix-auth
+               matrix-project
+               monitoring
+               node-iterator-api
+               okhttp-api
+               jdk-tool
+               antisamy-markup-formatter
+               pam-auth
+               workflow-aggregator
+               pipeline-graph-analysis
+               pipeline-utility-steps
+               workflow-api
+               workflow-basic-steps
+               pipeline-build-step
+               pipeline-model-definition
+               pipeline-model-extensions
+               pipeline-github-lib
+               workflow-cps
+               pipeline-input-step
+               workflow-job
+               pipeline-milestone-step
+               pipeline-model-api
+               workflow-multibranch
+               workflow-durable-task-step
+               pipeline-rest-api
+               workflow-scm-step
+               workflow-cps-global-lib
+               pipeline-stage-step
+               pipeline-stage-tags-metadata
+               pipeline-stage-view
+               workflow-step-api
+               workflow-support
+               plain-credentials
+               plugin-util-api
+               popper-api
+               resource-disposer
+               scm-api
+               script-security
+               simple-theme-plugin
+               snakeyaml-api
+               sonar
+               ssh-slaves
+               ssh-credentials
+               structs
+               timestamper
+               token-macro
+               trilead-api
+               variant
+               ws-cleanup
+              mode: '000755'
+              owner: ec2-user
+              group: ec2-user
+            "/home/ec2-user/batch-install-jenkins-plugins.sh":
+              content: |
+                #!/bin/bash
+                #
+
+                readonly PROGNAME=$(basename $0)
+                readonly PROGDIR=$(readlink -m $(dirname $0))
+                readonly ARGS="$@"
+
+                #
+                # Get up to date JSON file of stable plugins
+                #
+                get_update_center() {
+
+                  echo "Fetching JSON from update center"
+
+                # fetch up to date update center
+                  $CURL_CMD http://updates.jenkins-ci.org/stable/update-center.json -o $PLUGIN_TEMPDIR/update-center.json
+                # cleanup json
+                  sed -i 's|updateCenter.post(||g' $PLUGIN_TEMPDIR/update-center.json
+                  sed -i 's|);||g' $PLUGIN_TEMPDIR/update-center.json
+                }
+                #
+                # Fetch and install plugin
+                #
+                fetch_plugin()
+                {
+                  local DEP_LOOP
+                  local DEPENDENCIES
+                  local DEPENDENCY
+                  local URL
+                  local VERSION
+                  local SFILENAME
+                  local FFILENAME
+                  local PPLUGIN
+                  local OPTIONALP
+                  local FPLUGIN=$1
+                  if [ ! -z "$EXCLUDED_PLUGINS" ]; then
+                  for PPLUGIN in $EXCLUDED_PLUGINS
+                  do
+                    if [ "$FPLUGIN" = "$PPLUGIN" ]; then
+                    echo "$FPLUGIN is already provided, exiting"
+                    return
+                    fi
+                  done
+                  fi
+                  URL=`cat $PLUGIN_TEMPDIR/update-center.json | python -c "import sys, json; print json.load(sys.stdin)[\"plugins\"][\"$FPLUGIN\"][\"url\"]"`
+                  VERSION=`cat $PLUGIN_TEMPDIR/update-center.json | python -c "import sys, json; print json.load(sys.stdin)[\"plugins\"][\"$FPLUGIN\"][\"version\"]"`
+                  SFILENAME=`basename $URL | sed -e "s|.hpi|.jpi|g"`
+                  FFILENAME=`basename $URL | sed -e "s|.hpi|-$VERSION.jpi|g"`
+                  INCLUDEDPLUGINS="$INCLUDEDPLUGINS$FPLUGIN:$VERSION\n"
+                  if [ ! -f $PLUGIN_TEMPDIR/$FFILENAME ]; then
+                    echo "Downloading $FPLUGIN"
+                    $CURL_CMD $URL -o $PLUGIN_TEMPDIR/$FFILENAME
+                  fi
+                  cp $PLUGIN_TEMPDIR/$FFILENAME $PLUGINS_DIR/$SFILENAME
+                  DEPENDENCIES=`cat $PLUGIN_TEMPDIR/update-center.json | python -c "import sys, json; print json.load(sys.stdin)[\"plugins\"][\"$FPLUGIN\"][\"dependencies\"]"`
+                  if [ "$DEPENDENCIES" != "[]" ]; then
+                  for DEP_LOOP in 0 1 2 3 4 5 6 7 8 9 10; do
+                    DEPENDENCY=`cat $PLUGIN_TEMPDIR/update-center.json | python -c "import sys, json; print json.load(sys.stdin)[\"plugins\"][\"$FPLUGIN\"][\"dependencies\"][$DEP_LOOP][\"name\"]" 2>/dev/null || true`
+                    # No more dependency, exit loop
+                    if [ "$DEPENDENCY" = "" ]; then
+                      break;
+                    fi
+                    OPTIONALP=`cat $PLUGIN_TEMPDIR/update-center.json | python -c "import sys, json; print json.load(sys.stdin)[\"plugins\"][\"$FPLUGIN\"][\"dependencies\"][$DEP_LOOP][\"optional\"]" 2>/dev/null|| true`
+
+                    # Don't fetch optional dependencies
+                    if [ "$OPTIONALP" = "True" ]; then
+                      echo "$DEPENDENCY plugin is optional, it won't be included"
+                      continue;
+                    fi
+                    fetch_plugin $DEPENDENCY
+                  done
+                  fi
+                }
+                usage() {
+                  cat <<- EOF
+                  usage: $PROGNAME options
+                  Install or update Jenkins Plugins.
+                  OPTIONS:
+                     -p --plugins  file containing plugins list
+                     -x --xplugins   file containing excluded plugins list
+                     -d --plugindir  directory where to deploy plugins (.jpi)
+                  Examples:
+                     Run:
+                     $PROGNAME --plugins okplugins --excludedplugins nokplugins --plugindir /var/lib/myjenkins/plugins
+                EOF
+                  exit 1
+                }
+                #
+                # Parse command line
+                #
+                cmdline() {
+                  # got this idea from here:
+                  # http://kirk.webfinish.com/2009/10/bash-shell-script-to-use-getopts-with-gnu-style-long-positional-parameters/
+                  local arg=
+                  for arg
+                  do
+                    local delim=""
+                    case "$arg" in
+                      #translate --gnu-long-options to -g (short options)
+                      --plugins)     args="${args}-p ";;
+                      --xplugins)    args="${args}-e ";;
+                      --plugindir)     args="${args}-d ";;
+                      --help)      args="${args}-h ";;
+                      --verbose)     args="${args}-v ";;
+                      --debug)       args="${args}-x ";;
+                      #pass through anything else
+                      *) [[ "${arg:0:1}" == "-" ]] || delim="\""
+                        args="${args}${delim}${arg}${delim} ";;
+                    esac
+                  done
+                  #Reset the positional parameters to the short options
+                  eval set -- $args
+                  while getopts "hvxp:e:d:" OPTION
+                  do
+                     case $OPTION in
+                     v)
+                       readonly VERBOSE=1
+                       ;;
+                     x)
+                       readonly DEBUG='-x'
+                       set -x
+                       ;;
+                     h)
+                       usage
+                       exit 0
+                       ;;
+                     p)
+                       readonly PLUGINS_FILE=$OPTARG
+                       ;;
+                     e)
+                       readonly EXCLUDED_PLUGINS_FILE=$OPTARG
+                       ;;
+                     d)
+                       readonly PLUGINS_DIR=$OPTARG
+                       ;;
+                    esac
+                  done
+                  if [ -z "$PLUGINS_FILE" ]; then
+                    echo "You must provide plugin file"
+                    usage
+                  fi
+                  if [ -z "$PLUGINS_DIR" ]; then
+                    echo "You must provide plugin directory"
+                    usage
+                  fi
+                  readonly PLUGINS=`cat $PLUGINS_FILE`
+                  if [ ! -z "$EXCLUDED_PLUGINS_FILE" ]; then
+                    readonly EXCLUDED_PLUGINS=`cat $EXCLUDED_PLUGINS_FILE`
+                  fi
+                  if [ "$VERBOSE" = "1" ]; then
+                    CURL_CMD="curl -L"
+                  else
+                    CURL_CMD="curl -L --silent"
+                  fi
+                  if [ "$DEBUG" = "-x" ]; then
+                    CURL_CMD="$CURL_CMD -v"
+                  fi
+                }
+                main() {
+                  cmdline $ARGS
+                  readonly PLUGIN_TEMPDIR=`mktemp -d /tmp/batchjpi.XXXXXXX`
+                  get_update_center
+                  for PLUGIN in $PLUGINS
+                  do
+                    echo "Fetching plugin $PLUGIN and dependencies"
+                    fetch_plugin $PLUGIN
+                  done
+                  rm -rf $PLUGIN_TEMPDIR
+                }
+                main
+              mode: '000755'
+              owner: ec2-user
+              group: ec2-user
+            "/home/ec2-user/jenkins.yaml":
+              content: !Sub |
+                x-ec2_anchor: &ec2_anchor
+                  associatePublicIp: false
+                  connectBySSHProcess: false
+                  connectionStrategy: PRIVATE_IP
+                  deleteRootOnTermination: true
+                  ebsOptimized: true
+                  subnetId: "${Subnet04} ${Subnet05} ${Subnet06}"
+                  iamInstanceProfile: "${NodeInstanceProfile.Arn}"
+                  idleTerminationMinutes: ${SlaveIdleTimeOut}
+                  maxTotalUses: -1
+                  monitoring: false
+                  numExecutors: ${SlaveNoOfExecuters}
+                  stopOnTerminate: false
+                  useDedicatedTenancy: false
+                  useEphemeralDevices: false
+                  ami: "${CreateJenkinsSlaveImage}"
+                  securityGroups: "${NodeSecurityGroup}"
+                  remoteFS: "/home/ec2-user"
+                  remoteAdmin: "ec2-user"
+                  mode: "NORMAL"
+                  minimumNumberOfInstances: ${SlaveMinInstances}
+                  minimumNumberOfSpareInstances: ${SlaveSpareInstances}
+                  hostKeyVerificationStrategy: ACCEPT_NEW
+                  amiType:
+                    unixData:
+                      sshPort: "22"
+                  tags:
+                    - name: Name
+                      value: Jenkins-Slave
+                jenkins:
+                  systemMessage: "Jenkins configured automatically by Jenkins Configuration as Code plugin\n\n"
+                  numExecutors: ${JenkinsNoOfExecuters}
+                  crumbIssuer:
+                    standard:
+                      excludeClientIPFromCrumb: false
+                  globalNodeProperties:
+                    - envVars:
+                        env:
+                        - key: GitcredentialsId
+                          value: git_credential
+                  securityRealm:
+                    local:
+                      allowsSignup: false
+                      users:
+                        - id: "admin"
+                          password: "INITIAL_PASSWORD"
+                  authorizationStrategy:
+                    projectMatrix:
+                      permissions:
+                        - "Overall/Administer:admin"
+                  clouds:
+                    - amazonEC2:
+                        cloudName: "ec2"
+                        instanceCapStr: ${SlaveMaxInstances}
+                        useInstanceProfileForCredentials: true
+                        sshKeysCredentialsId: "slave_ssh_key"
+                        noDelayProvisioning: true
+                        region: "${AWS::Region}"
+                        templates:
+                          - description: "Auto configured EC2 Agent"
+                            type: "${SlaveInstanceType}"
+                            labelString: "JenkinsSlaves"
+                            <<: *ec2_anchor
+                tool:
+                  jdk:
+                    installations:
+                      - name: jdk11
+                        home: JDK_HOME
+                credentials:
+                  system:
+                    domainCredentials:
+                      - credentials:
+                          - basicSSHUserPrivateKey:
+                              scope: GLOBAL
+                              id: slave_ssh_key
+                              username: ec2-user
+                              description: "Slave SSH Key"
+                              privateKeySource:
+                                directEntry:
+                                  privateKey: ${EC2SlaveKey}
+                          - usernamePassword:
+                              scope: GLOBAL
+                              id: "git_credential"
+                              username: "${GitUsername}"
+                              password: "${GitPassword}"
+                              description: "Git Credentials"
+                unclassified:
+                  sonarglobalconfiguration:
+                    buildWrapperEnabled: false
+                    installations:
+                      - name: "SonarQubeServer"
+                        serverUrl: "http://${JenkinsLoadBalancer.DNSName}/sonarqube"
+              mode: '000755'
+              owner: ec2-user
+              group: ec2-user
+            "/home/ec2-user/install-jenkins":
+              content: !Sub |
+                #!/bin/bash
+                # Install Plugins
+                while [ ! -d /${MountPoint}/plugins ]
+                do
+                  sleep 60
+                done
+                if [ ! -f /${MountPoint}/jenkins-plugins-installed ]; then
+                  ./home/ec2-user/batch-install-jenkins-plugins.sh --plugins /home/ec2-user/plugins.txt --plugindir /${MountPoint}/plugins
+                  touch /${MountPoint}/jenkins-plugins-installed
+                  chmod 755 /${MountPoint}/jenkins-plugins-installed
+                fi
+                jdk_home=$(find /usr/lib/jvm -name java-11* -type d)
+                sed -i -e "s|JDK_HOME|$jdk_home|g" /home/ec2-user/jenkins.yaml
+                while [ ! -f /${MountPoint}/secrets/initialAdminPassword ]
+                do
+                  sleep 30s
+                done
+                if [ ! -f /${MountPoint}/jenkins.yaml ]; then
+                  read -r super_password < /${MountPoint}/secrets/initialAdminPassword
+                  sed -i -e "s|INITIAL_PASSWORD|$super_password|g" /home/ec2-user/jenkins.yaml
+                  mv /${MountPoint}/secrets/initialAdminPassword /${MountPoint}/secrets/initialAdminPassword.back
+                  cp /home/ec2-user/jenkins.yaml /${MountPoint}/jenkins.yaml
+                fi
+                cp /home/ec2-user/org.jenkinsci.plugins.workflow.libs.GlobalLibraries.xml /${MountPoint}/
+              mode: '000755'
+              owner: ec2-user
+              group: ec2-user
           commands:
             01_mount:
               command: !Sub >
@@ -3583,137 +3587,143 @@ Resources:
               command: !Sub "chown jenkins:jenkins -R /${MountPoint}"
             06_jenkins_restart:
               command: "systemctl restart jenkins"
-    Properties:	
-      AssociatePublicIpAddress: "false"	
-      BlockDeviceMappings:	
-        - DeviceName: /dev/xvda	
-          Ebs:	
-            DeleteOnTermination: true	
-            VolumeSize: !Ref NodeVolumeSize	
-            VolumeType: gp2	
-      IamInstanceProfile: !Ref NodeInstanceProfile	
-      ImageId: !Ref CreateJenkinsImage	
-      InstanceType: !Ref NodeInstanceType	
-      KeyName: !Ref KeyName	
-      SecurityGroups:	
-        - Ref: NodeSecurityGroup	
-      UserData:	
-        Fn::Base64: !Sub |	
-          #!/bin/bash -xe	
-          yum update -y	
-          yum install -y aws-cfn-bootstrap	
-          /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource NodeLaunchConfig --configsets MountConfig --region ${AWS::Region}	
-          crontab /home/ec2-user/crontab	
-          /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --region ${AWS::Region} '${WaitHandle}'	
+    Properties:
+      AssociatePublicIpAddress: "false"
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            DeleteOnTermination: true
+            VolumeSize: !Ref NodeVolumeSize
+            VolumeType: gp2
+      IamInstanceProfile: !Ref NodeInstanceProfile
+      ImageId: !Ref CreateJenkinsImage
+      InstanceType: !Ref NodeInstanceType
+      KeyName: !Ref KeyName
+      SecurityGroups:
+        - Ref: NodeSecurityGroup
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash -xe
+          yum update -y
+          yum install -y aws-cfn-bootstrap
+          /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource NodeLaunchConfig --configsets MountConfig --region ${AWS::Region}
+          crontab /home/ec2-user/crontab
+          /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource NodeGroup --region ${AWS::Region}
 
-  NodeGroup:	
-    Type: "AWS::AutoScaling::AutoScalingGroup"	
-    Properties:	
-      DesiredCapacity: !Ref NodeAutoScalingGroupDesiredCapacity	
-      LaunchConfigurationName: !Ref NodeLaunchConfig	
-      TargetGroupARNs:	
-        - !Ref TargetGroup	
-      MaxSize: !Ref NodeAutoScalingGroupMaxSize	
-      MinSize: !Ref NodeAutoScalingGroupMinSize	
-      HealthCheckType: ELB	
-      HealthCheckGracePeriod: 120	
-      Tags:	
-        - Key: Name	
-          PropagateAtLaunch: "true"	
-          Value: !Sub ${NodeGroupName}-jenkins	
-      VPCZoneIdentifier:	
-        - !Ref Subnet04	
-        - !Ref Subnet05	
-        - !Ref Subnet06	
-    UpdatePolicy:	
-      AutoScalingRollingUpdate:	
-        MaxBatchSize: "1"	
-        MinInstancesInService: !Ref NodeAutoScalingGroupDesiredCapacity	
-        PauseTime: PT5M	
+  NodeGroup:
+    Type: "AWS::AutoScaling::AutoScalingGroup"
+    CreationPolicy:
+      ResourceSignal:
+        Timeout: PT2H
+    Properties:
+      DesiredCapacity: !Ref NodeAutoScalingGroupDesiredCapacity
+      LaunchConfigurationName: !Ref NodeLaunchConfig
+      TargetGroupARNs:
+        - !Ref TargetGroup
+      MaxSize: !Ref NodeAutoScalingGroupMaxSize
+      MinSize: !Ref NodeAutoScalingGroupMinSize
+      HealthCheckType: ELB
+      HealthCheckGracePeriod: 120
+      Tags:
+        - Key: Name
+          PropagateAtLaunch: "true"
+          Value: !Sub ${NodeGroupName}-jenkins
+      VPCZoneIdentifier:
+        - !Ref Subnet04
+        - !Ref Subnet05
+        - !Ref Subnet06
+    UpdatePolicy:
+      AutoScalingRollingUpdate:
+        MaxBatchSize: "1"
+        MinInstancesInService: !Ref NodeAutoScalingGroupDesiredCapacity
+        PauseTime: PT5M
 
-  SonarNodeLaunchConfig:	
-    Type: "AWS::AutoScaling::LaunchConfiguration"	
-    DependsOn:	
-      - DatabasePrimaryInstance	
-      - JenkinsLoadBalancer	
-    Metadata:	
-      AWS::CloudFormation::Init:	
-        configSets:	
-          SonarConfig:	
-          - setup	
-          - config	
-        setup:	
-          packages:	
-            yum:	
-              nfs-utils: []	
-          files:	
-            "/home/ec2-user/sonar.properties":	
-              content: !Sub |	
-                sonar.web.context=/sonarqube	
-                sonar.path.data=/opt/sonarqube/data	
-                sonar.jdbc.username=${DatabaseUsername}	
-                sonar.jdbc.password=${DatabasePassword}	
-                sonar.jdbc.url=jdbc:postgresql://${DatabasePrimaryInstance.Endpoint.Address}:${DatabasePrimaryInstance.Endpoint.Port}/${DatabaseName}	
-              mode: '000755'	
-              owner: sonar	
-              group: sonar	
-          commands:	
-            01_update_fstab:	
-              command: "chown sonar:sonar -R /opt/sonarqube"	
-        config:	
-          commands:	
-            01_copy_props:	
-              command: "cp /home/ec2-user/sonar.properties /opt/sonarqube/conf/"	
-            02_sonar_restart:	
-              command: "/etc/init.d/sonar restart"	
-            03_create_webhook:	
-              command: !Sub "sleep 600 && curl \"http://admin:admin@localhost:9000/sonarqube/api/webhooks/create\" -X POST -d \"name=Jenkins&url=http://${JenkinsLoadBalancer.DNSName}/sonarqube-webhook/\""	
-    Properties:	
-      AssociatePublicIpAddress: "false"	
-      BlockDeviceMappings:	
-        - DeviceName: /dev/xvda	
-          Ebs:	
-            DeleteOnTermination: true	
-            VolumeSize: !Ref SonarNodeVolumeSize	
-            VolumeType: gp2	
-      IamInstanceProfile: !Ref NodeInstanceProfile	
-      ImageId: !Ref CreateSonarImage	
-      InstanceType: !Ref SonarInstanceType	
-      KeyName: !Ref KeyName	
-      SecurityGroups:	
-        - Ref: NodeSecurityGroup	
-      UserData:	
-        Fn::Base64: !Sub |	
-          #!/bin/bash -xe	
-          yum install -y aws-cfn-bootstrap	
-          /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource SonarNodeLaunchConfig --configsets SonarConfig --region ${AWS::Region}	
-          crontab /home/ec2-user/crontab	
-          /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --region ${AWS::Region} '${WaitHandle}'	
+  SonarNodeLaunchConfig:
+    Type: "AWS::AutoScaling::LaunchConfiguration"
+    DependsOn:
+      - DatabasePrimaryInstance
+      - JenkinsLoadBalancer
+    Metadata:
+      AWS::CloudFormation::Init:
+        configSets:
+          SonarConfig:
+          - setup
+          - config
+        setup:
+          packages:
+            yum:
+              nfs-utils: []
+          files:
+            "/home/ec2-user/sonar.properties":
+              content: !Sub |
+                sonar.web.context=/sonarqube
+                sonar.path.data=/opt/sonarqube/data
+                sonar.jdbc.username=${DatabaseUsername}
+                sonar.jdbc.password=${DatabasePassword}
+                sonar.jdbc.url=jdbc:postgresql://${DatabasePrimaryInstance.Endpoint.Address}:${DatabasePrimaryInstance.Endpoint.Port}/${DatabaseName}
+              mode: '000755'
+              owner: sonar
+              group: sonar
+          commands:
+            01_update_fstab:
+              command: "chown sonar:sonar -R /opt/sonarqube"
+        config:
+          commands:
+            01_copy_props:
+              command: "cp /home/ec2-user/sonar.properties /opt/sonarqube/conf/"
+            02_sonar_restart:
+              command: "/etc/init.d/sonar restart"
+            03_create_webhook:
+              command: !Sub "sleep 600 && curl \"http://admin:admin@localhost:9000/sonarqube/api/webhooks/create\" -X POST -d \"name=Jenkins&url=http://${JenkinsLoadBalancer.DNSName}/sonarqube-webhook/\""
+    Properties:
+      AssociatePublicIpAddress: "false"
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            DeleteOnTermination: true
+            VolumeSize: !Ref SonarNodeVolumeSize
+            VolumeType: gp2
+      IamInstanceProfile: !Ref NodeInstanceProfile
+      ImageId: !Ref CreateSonarImage
+      InstanceType: !Ref SonarInstanceType
+      KeyName: !Ref KeyName
+      SecurityGroups:
+        - Ref: NodeSecurityGroup
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash -xe
+          yum install -y aws-cfn-bootstrap
+          /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource SonarNodeLaunchConfig --configsets SonarConfig --region ${AWS::Region}
+          crontab /home/ec2-user/crontab
+          /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource SonarNodeGroup --region ${AWS::Region}
 
-  SonarNodeGroup:	
-    Type: "AWS::AutoScaling::AutoScalingGroup"	
-    Properties:	
-      DesiredCapacity: !Ref SonarNodeAutoScalingGroupDesiredCapacity	
-      LaunchConfigurationName: !Ref SonarNodeLaunchConfig	
-      TargetGroupARNs:	
-        - !Ref SonarTargetGroup	
-      MaxSize: !Ref SonarNodeAutoScalingGroupMaxSize	
-      MinSize: !Ref SonarNodeAutoScalingGroupMinSize	
-      HealthCheckType: ELB	
-      HealthCheckGracePeriod: 120	
-      Tags:	
-        - Key: Name	
-          PropagateAtLaunch: "true"	
-          Value: !Sub ${NodeGroupName}-sonarqube	
-      VPCZoneIdentifier:	
-        - !Ref Subnet04	
-        - !Ref Subnet05	
-        - !Ref Subnet06	
-    UpdatePolicy:	
-      AutoScalingRollingUpdate:	
-        MaxBatchSize: "1"	
-        MinInstancesInService: !Ref NodeAutoScalingGroupDesiredCapacity	
-        PauseTime: PT5M	
+  SonarNodeGroup:
+    Type: "AWS::AutoScaling::AutoScalingGroup"
+    CreationPolicy:
+      ResourceSignal:
+        Timeout: PT30M
+    Properties:
+      DesiredCapacity: !Ref SonarNodeAutoScalingGroupDesiredCapacity
+      LaunchConfigurationName: !Ref SonarNodeLaunchConfig
+      TargetGroupARNs:
+        - !Ref SonarTargetGroup
+      MaxSize: !Ref SonarNodeAutoScalingGroupMaxSize
+      MinSize: !Ref SonarNodeAutoScalingGroupMinSize
+      HealthCheckType: ELB
+      HealthCheckGracePeriod: 120
+      Tags:
+        - Key: Name
+          PropagateAtLaunch: "true"
+          Value: !Sub ${NodeGroupName}-sonarqube
+      VPCZoneIdentifier:
+        - !Ref Subnet04
+        - !Ref Subnet05
+        - !Ref Subnet06
+    UpdatePolicy:
+      AutoScalingRollingUpdate:
+        MaxBatchSize: "1"
+        MinInstancesInService: !Ref SonarNodeAutoScalingGroupDesiredCapacity
+        PauseTime: PT5M
 
   myCPUPolicy:	
     Type: AWS::AutoScaling::ScalingPolicy	
