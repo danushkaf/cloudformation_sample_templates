@@ -1990,7 +1990,8 @@ Resources:
       - AMIAutomationInvokerFunction	
       - AMIAutomationCallbackFunction	
       - DeleteAMIFunctionPermission	
-      - UpdateSSMParamFunctionPermission	
+      - UpdateSSMParamFunctionPermission
+      - LambdaInvokePolicy
     Properties:	
       AutomationName: JenkinsGoldenAMICreateSSMDocument	
       ServiceToken:	
@@ -2010,7 +2011,8 @@ Resources:
       - AMIAutomationInvokerFunction	
       - AMIAutomationCallbackFunction	
       - DeleteAMIFunctionPermission	
-      - UpdateSSMParamFunctionPermission	
+      - UpdateSSMParamFunctionPermission
+      - LambdaInvokePolicy
     Properties:	
       AutomationName: JenkinsSlaveGoldenAMICreateSSMDocument	
       ServiceToken:	
@@ -2030,7 +2032,8 @@ Resources:
       - AMIAutomationInvokerFunction	
       - AMIAutomationCallbackFunction	
       - DeleteAMIFunctionPermission	
-      - UpdateSSMParamFunctionPermission	
+      - UpdateSSMParamFunctionPermission
+      - LambdaInvokePolicy
     Properties:	
       AutomationName: BastionGoldenAMICreateSSMDocument	
       ServiceToken:	
@@ -2050,7 +2053,8 @@ Resources:
       - AMIAutomationInvokerFunction	
       - AMIAutomationCallbackFunction	
       - DeleteAMIFunctionPermission	
-      - UpdateSSMParamFunctionPermission	
+      - UpdateSSMParamFunctionPermission
+      - LambdaInvokePolicy
     Properties:	
       AutomationName: SonarGoldenAMICreateSSMDocument	
       ServiceToken:	
